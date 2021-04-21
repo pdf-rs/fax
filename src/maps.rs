@@ -3,7 +3,7 @@ use crate::BitReader;
 
 enum Entry<T: Copy + 'static> {
     Empty,
-    Leaf(u8, &'static [(T, u8)]),
+    Leaf(u8, &'static [Option<(T, u8)>]),
     Value(T, u8),
     Prefix(u8, &'static [Entry<T>])
 }
@@ -16,16 +16,13 @@ impl<T: Copy> Entry<T> {
                 Some(val)
             }
             Entry::Leaf(width, lut) => {
-                dbg!(width);
                 let index = reader.peek(width)?;
-                println!("{} -> {:0b}", width, index);
-                let (val, len) = lut[index as usize];
+                let (val, len) = lut[index as usize]?;
                 reader.consume(len);
                 Some(val)
             }
             Entry::Prefix(width, lut) => {
                 let index = reader.peek(width)?;
-                println!("{} -> {:0b}", width, index);
                 let entry = &lut[index as usize];
                 match *entry {
                     Entry::Empty => None,
@@ -43,16 +40,16 @@ impl<T: Copy> Entry<T> {
     }
 }
 
-#[derive(Copy, Clone)]
-pub enum Code {
+#[derive(Copy, Clone, Debug)]
+pub enum Mode {
     Pass,
     Horizontal,
     Vertical(i8),
 }
-use Code::*;
+use Mode::*;
 
 bitmaps! {
-    codes <Code> {
+    mode <Mode> {
         0001 => Pass,
         001 => Horizontal,
         1 => Vertical(0),

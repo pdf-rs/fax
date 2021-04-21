@@ -98,16 +98,19 @@ impl BitMap {
                 let name = Ident::new(&format!("LEAF_LUT_{}", bits), Span::call_site());
                 let size = lut.data.len();
                 let width = lut.width;
-                let entries = lut.data.iter().map(|&(idx, len)| {
-                    let val = &self.entries[idx].value;
-                    quote! { (#val, #len) }
+                let entries = lut.data.iter().map(|e| match *e {
+                    Some((idx, len)) => {
+                        let val = &self.entries[idx].value;
+                        quote! { Some((#val, #len)) }
+                    },
+                    None => quote!{ None }
                 });
                 let typ = match self.typ {
                     Some(ref t) => quote!{ #t },
                     None => quote! { u16 }
                 };
                 defs.push(quote!{
-                    static #name: [(#typ, u8); #size] = [
+                    static #name: [Option<(#typ, u8)>; #size] = [
                         #(#entries,)*
                     ];
                 });
@@ -229,26 +232,30 @@ impl Parse for Bits {
         Ok(Bits { data, len })
     }
 }
-fn build_leaf_lut<T: Copy + Default + Debug>(patterns: &[(T, Bits)], prefix: u8) -> Vec<(T, u8)> {
-    assert!(patterns.len() > 1);
-    //println!("prefix={}, pat={:?}", prefix, patterns);
-    let width = patterns.iter().map(|(_, b)| b.len).max().unwrap() - prefix;
-    let mut lut = vec![(T::default(), 0); 1usize << width];
-    for (val, pat) in patterns {
-        let pat = pat.strip_prefix(prefix);
-        let n = 1 << (width - pat.len);
-        for idx in pat.data .. pat.data + n {
-            lut[idx as usize] = (*val, pat.len);
-        }
-    }
-
-    assert!(lut.len() > 1);
-    lut
-}
 
 struct LeafLut<T> {
     width: u8,
-    data: Vec<(T, u8)>
+    data: Vec<Option<(T, u8)>>
+}
+impl<T: Clone> LeafLut<T> {
+    fn build(patterns: &[(T, Bits)], prefix: u8, width: u8) -> Self {
+        assert!(patterns.len() > 1);
+
+        let mut data = vec![None; 1usize << width];
+        for (val, pat) in patterns {
+            let pat = pat.strip_prefix(prefix);
+            
+            for idx in pat.prefix_range(width) {
+                data[idx as usize] = Some((val.clone(), pat.len));
+            }
+        }
+    
+        assert!(data.len() > 1);
+        LeafLut {
+            data,
+            width
+        }
+    }
 }
 enum Node<T> {
     Value(T, u8),
@@ -286,7 +293,7 @@ impl<T: Copy + Default + Debug> Node<T> {
                 if width > 8 {
                     Some(Node::PrefixLut(PrefixLut::build(&patterns, prefix)))
                 } else {
-                    Some(Node::LeafLut(LeafLut { width, data: build_leaf_lut(patterns, prefix)} ))
+                    Some(Node::LeafLut(LeafLut::build(patterns, prefix, width) ))
                 }
             }
         }

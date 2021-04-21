@@ -1,4 +1,7 @@
 mod maps;
+pub mod decoder;
+
+pub use decoder::decode;
 
 pub trait BitReader {
     fn peek(&self, bits: u8) -> Option<u16>;
@@ -37,7 +40,7 @@ impl<R: Iterator<Item=u8>> BitReader for SliceBits<R> {
         if self.valid >= bits {
             let shift = self.valid - bits;
             let out = (self.partial >> shift) as u16;
-            println!("partial: {:0b}, valid: {}, bits: {}, shift: {}, out: {:0b}", self.partial, self.valid, bits, shift, out);
+            //println!("partial: {:0w$b}, valid: {}, bits: {}, shift: {}, out: {:0b}", self.partial, self.valid, bits, shift, out, w=self.valid as usize);
             Some(out)
         } else {
             None
