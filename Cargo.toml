@@ -8,4 +8,6 @@ edition = "2018"
 
 [dependencies]
 fax_derive = { path = "derive" }
+
+[dev-dependencies]
 image = "*"
