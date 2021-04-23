@@ -33,6 +33,7 @@ fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
 }
 
 fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
+    //print!("{:?} ", current);
     match current {
         Color::Black => with_markup(black, reader),
         Color::White => with_markup(white, reader),
@@ -52,12 +53,53 @@ pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item=Color> + '_ {
     }).chain(repeat(color)).take(width as usize)
 }
 
-fn color_change() -> impl Iterator<Item=Color> {
-    let mut c = Color::Black;
-    std::iter::from_fn(move || {
-        c = !c;
-        Some(c)
-    })
+struct Transitions<'a> {
+    edges: &'a [u16],
+    pos: usize
+}
+impl<'a> Transitions<'a> {
+    fn new(edges: &'a [u16]) -> Self {
+        Transitions { edges, pos: 0 }
+    }
+    fn seek_back(&mut self, start: u16) {
+        while self.pos > 0 {
+            if start < self.edges[self.pos-1] {
+                self.pos -= 1;
+            } else {
+                break;
+            }
+        }
+    }
+    fn next_color(&mut self, start: u16, color: Color) -> Option<u16> {
+        while self.pos < self.edges.len() {
+            if self.edges[self.pos] <= start {
+                self.pos += 1;
+                continue;
+            }
+
+            if (self.pos % 2 == 0) != (color == Color::Black) {
+                self.pos += 1;
+            }
+
+            break;
+        }
+        if self.pos < self.edges.len() {
+            let val = self.edges[self.pos];
+            self.pos += 1;
+            Some(val)
+        } else {
+            None
+        }
+    }
+    fn next(&mut self) -> Option<u16> {
+        if self.pos < self.edges.len() {
+            let val = self.edges[self.pos];
+            self.pos += 1;
+            Some(val)
+        } else {
+            None
+        }
+    }
 }
 
 pub fn decode(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
@@ -65,34 +107,43 @@ pub fn decode(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut
     let mut reference: Vec<u16> = vec![];
     let mut current: Vec<u16> = vec![];
 
-    'outer: loop {
-        let mut transitions = reference.iter().cloned().zip(color_change());
+    'outer: for y in 0 .. {
+        let mut transitions = Transitions::new(&reference);
         let mut a0 = 0;
         let mut color = Color::White;
+        //println!("\n\nline {}", y);
 
         loop {
+            //reader.print();
             let mode = match mode(&mut reader) {
                 Some(mode) => mode,
                 None => break 'outer,
             };
-            //println!("{:?}", mode);
+            //println!("{:?}, color={:?}, a0={}", mode, color, a0);
             
 
             match mode {
                 Mode::Pass => {
-                    let (b1, _) = transitions.by_ref().skip_while(|&(b, c)| b <= a0 || c != color).next().unwrap();
-                    let (b2, _) = transitions.next().unwrap();
-                    a0 = b2;
+                    let b1 = transitions.next_color(a0, !color).unwrap();
+                    //println!("b1={}", b1);
+                    if let Some(b2) = transitions.next() {
+                        //println!("b2={}", b2);
+                        a0 = b2;
+                    }
                 }
                 Mode::Vertical(delta) => {
-                    let (b1, _) = match transitions.by_ref().skip_while(|&(b, c)| b <= a0 || c != color).next() {
+                    let b1 = match transitions.next_color(a0, !color) {
                         Some(p) => p,
                         None => break
                     };
                     let a1 = (b1 as i16 + delta as i16) as u16;
+                    //println!("transition to {:?} at {}", !color, a1);
                     current.push(a1);
                     color = !color;
                     a0 = a1;
+                    if delta < 0 {
+                        transitions.seek_back(a0);
+                    }
                 }
                 Mode::Horizontal => {
                     let a0a1 = colored(color, &mut reader)?;
@@ -100,9 +151,20 @@ pub fn decode(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut
                     let a1 = a0 + a0a1;
                     let a2 = a1 + a1a2;
                     //println!("a0a1={}, a1a2={}, a1={}, a2={}", a0a1, a1a2, a1, a2);
+                    
                     current.push(a1);
+                    if a2 >= width {
+                        break;
+                    }
                     current.push(a2);
                     a0 = a2;
+                }
+                Mode::Extension => {
+                    let xxx = reader.peek(3).unwrap();
+                    //println!("extension: {:03b}", xxx);
+                    reader.consume(3);
+                    //println!("{:?}", current);
+                    break 'outer;
                 }
             }
 
@@ -110,11 +172,13 @@ pub fn decode(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut
                 break;
             }
         }
+        //println!("{:?}", current);
 
         line_cb(&current);
         std::mem::swap(&mut reference, &mut current);
         current.clear();
     }
+    //reader.print();
 
     Some(())
 }
