@@ -1,5 +1,5 @@
 use fax_derive::bitmaps;
-use crate::BitReader;
+use crate::{BitReader, Bits};
 
 enum Entry<T: Copy + 'static> {
     Empty,
@@ -40,6 +40,9 @@ impl<T: Copy> Entry<T> {
     }
 }
 
+pub const EDFB_HALF: Bits = Bits { data: 1, len: 12 };
+pub const EOL: Bits = Bits { data: 1, len: 12 };
+
 #[derive(Copy, Clone, Debug)]
 pub enum Mode {
     Pass,
@@ -47,20 +50,19 @@ pub enum Mode {
     Vertical(i8),
     Extension,
 }
-use Mode::*;
 
 bitmaps! {
     mode <Mode> {
-        0001 => Pass,
-        001 => Horizontal,
-        1 => Vertical(0),
-        011 => Vertical(1),
-        000011 => Vertical(2),
-        0000011 => Vertical(3),
-        010 => Vertical(-1),
-        000010 => Vertical(-2),
-        0000010 => Vertical(-3),
-        0000001 => Extension,
+        0001 => Mode::Pass,
+        001 => Mode::Horizontal,
+        1 => Mode::Vertical(0),
+        011 => Mode::Vertical(1),
+        000011 => Mode::Vertical(2),
+        0000011 => Mode::Vertical(3),
+        010 => Mode::Vertical(-1),
+        000010 => Mode::Vertical(-2),
+        0000010 => Mode::Vertical(-3),
+        0000001 => Mode::Extension,
     },
     black {
         0000110111 => 0,

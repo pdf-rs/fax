@@ -1,5 +1,5 @@
 use proc_macro2::{TokenStream, Span, Literal};
-use quote::{quote};
+use quote::{quote, ToTokens};
 use syn::{
     parse_macro_input, Expr, Error, parse::{ParseStream, Parse}, Result, Token, Ident,
     punctuated::Punctuated, braced, Type,
@@ -20,12 +20,39 @@ pub fn bitmaps(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             Some(ref t) => quote!{ #t },
             None => quote! { u16 }
         };
+        let list = map.entries.iter().map(|entry| {
+            let bits = entry.bits;
+            let val = &entry.value;
+            quote!{ (#val, #bits) }
+        });
+        let arms = map.entries.iter().map(|entry| {
+            let bits = entry.bits;
+            let val = &entry.value;
+            quote!{ #val => #bits }
+        });
+        let n = map.entries.len();
 
         quote! {
-            pub fn #name(reader: &mut impl BitReader) -> Option<#typ> {
+            pub mod #name {
+                pub use super::*;
+                use crate::{BitReader, Bits};
+
                 #code
-                let root = #root;
-                root.find(reader)
+
+                pub fn decode(reader: &mut impl BitReader) -> Option<#typ> {
+                    let root = #root;
+                    root.find(reader)
+                }
+
+                pub fn encode(val: #typ) -> Option<Bits> {
+                    let bits = match val {
+                        #(#arms,)*
+                        _ => return None
+                    };
+                    Some(bits)
+                }
+
+                pub static ENTRIES: [(#typ, Bits); #n] = [ #(#list,)* ];
             }
         }
     });
@@ -211,6 +238,14 @@ impl fmt::Display for Bits {
 impl fmt::Debug for Bits {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "d={:0b} w={}", self.data, self.len)
+    }
+}
+impl ToTokens for Bits {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Bits { data, len } = *self;
+        tokens.extend(quote! {
+            Bits { data: #data, len: #len }
+        })
     }
 }
 impl Parse for Bits {

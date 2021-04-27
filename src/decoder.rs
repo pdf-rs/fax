@@ -1,21 +1,7 @@
-use crate::{SliceBits, BitReader};
-use crate::maps::{Mode, black, white, mode};
+use crate::{ByteReader, BitReader, Color, Transitions};
+use crate::maps::{Mode, black, white, mode, EDFB_HALF, EOL};
 use std::ops::Not;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Color {
-    Black,
-    White
-}
-impl Not for Color {
-    type Output = Self;
-    fn not(self) -> Self {
-        match self {
-            Color::Black => Color::White,
-            Color::White => Color::Black,
-        }
-    }
-}
 
 fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
     where D: Fn(&mut R) -> Option<u16>
@@ -35,8 +21,8 @@ fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
 fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
     //print!("{:?} ", current);
     match current {
-        Color::Black => with_markup(black, reader),
-        Color::White => with_markup(white, reader),
+        Color::Black => with_markup(black::decode, reader),
+        Color::White => with_markup(white::decode, reader),
     }
 }
 
@@ -53,57 +39,38 @@ pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item=Color> + '_ {
     }).chain(repeat(color)).take(width as usize)
 }
 
-struct Transitions<'a> {
-    edges: &'a [u16],
-    pos: usize
-}
-impl<'a> Transitions<'a> {
-    fn new(edges: &'a [u16]) -> Self {
-        Transitions { edges, pos: 0 }
-    }
-    fn seek_back(&mut self, start: u16) {
-        while self.pos > 0 {
-            if start < self.edges[self.pos-1] {
-                self.pos -= 1;
+pub fn decode_g3(input: impl Iterator<Item=u8>, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
+    let mut reader = ByteReader::new(input);
+    let mut current = vec![];
+    reader.expect(EOL).unwrap();
+    
+    'a: loop {
+        let mut a0 = 0;
+        let mut color = Color::White;
+        while let Some(p) = colored(color, &mut reader) {
+            a0 += p;
+            current.push(a0);
+            color = !color;
+        }
+        reader.expect(EOL).unwrap();
+        line_cb(&current);
+        current.clear();
+
+        for _ in 0 .. 6 {
+            if reader.peek(EOL.len) == Some(EOL.data) {
+                reader.consume(EOL.len);
             } else {
-                break;
+                continue 'a;
             }
         }
+        break;
     }
-    fn next_color(&mut self, start: u16, color: Color) -> Option<u16> {
-        while self.pos < self.edges.len() {
-            if self.edges[self.pos] <= start {
-                self.pos += 1;
-                continue;
-            }
-
-            if (self.pos % 2 == 0) != (color == Color::Black) {
-                self.pos += 1;
-            }
-
-            break;
-        }
-        if self.pos < self.edges.len() {
-            let val = self.edges[self.pos];
-            self.pos += 1;
-            Some(val)
-        } else {
-            None
-        }
-    }
-    fn next(&mut self) -> Option<u16> {
-        if self.pos < self.edges.len() {
-            let val = self.edges[self.pos];
-            self.pos += 1;
-            Some(val)
-        } else {
-            None
-        }
-    }
+    Some(())
 }
 
-pub fn decode(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
-    let mut reader = SliceBits::new(input);
+
+pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
+    let mut reader = ByteReader::new(input);
     let mut reference: Vec<u16> = vec![];
     let mut current: Vec<u16> = vec![];
 
@@ -115,7 +82,7 @@ pub fn decode(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut
 
         loop {
             //reader.print();
-            let mode = match mode(&mut reader) {
+            let mode = match mode::decode(&mut reader) {
                 Some(mode) => mode,
                 None => break 'outer,
             };
@@ -178,6 +145,8 @@ pub fn decode(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut
         std::mem::swap(&mut reference, &mut current);
         current.clear();
     }
+    reader.expect(EDFB_HALF).unwrap();
+    reader.expect(EDFB_HALF).unwrap();
     //reader.print();
 
     Some(())
