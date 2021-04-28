@@ -1,6 +1,5 @@
 use crate::{ByteReader, BitReader, Color, Transitions};
 use crate::maps::{Mode, black, white, mode, EDFB_HALF, EOL};
-use std::ops::Not;
 
 
 fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
@@ -26,6 +25,10 @@ fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
     }
 }
 
+/// Turn a list of color changing position into an iterator of pixel colors
+///
+/// The width of the line/image has to be given in `width`.
+/// The iterator will produce exactly that many items.
 pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item=Color> + '_ {
     use std::iter::{repeat};
     let mut color = Color::White;
@@ -39,6 +42,12 @@ pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item=Color> + '_ {
     }).chain(repeat(color)).take(width as usize)
 }
 
+/// Decode a Group 3 encoded image.
+/// 
+/// The callback `line_cb` is called for each decoded line.
+/// The argument is the list of positions of color change, starting with white.
+/// 
+/// To obtain an iterator over the pixel colors, the `pels` function is provided.
 pub fn decode_g3(input: impl Iterator<Item=u8>, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
     let mut reader = ByteReader::new(input);
     let mut current = vec![];
@@ -68,13 +77,19 @@ pub fn decode_g3(input: impl Iterator<Item=u8>, mut line_cb: impl FnMut(&[u16]))
     Some(())
 }
 
-
+/// Decode a Group 4 Image
+/// 
+/// - `width` is the width of the image.
+/// - The callback `line_cb` is called for each decoded line.
+///   The argument is the list of positions of color change, starting with white.
+/// 
+/// To obtain an iterator over the pixel colors, the `pels` function is provided.
 pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
     let mut reader = ByteReader::new(input);
     let mut reference: Vec<u16> = vec![];
     let mut current: Vec<u16> = vec![];
 
-    'outer: for y in 0 .. {
+    'outer: loop {
         let mut transitions = Transitions::new(&reference);
         let mut a0 = 0;
         let mut color = Color::White;
@@ -91,7 +106,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl Fn
 
             match mode {
                 Mode::Pass => {
-                    let b1 = transitions.next_color(a0, !color).unwrap();
+                    let _ = transitions.next_color(a0, !color)?;
                     //println!("b1={}", b1);
                     if let Some(b2) = transitions.next() {
                         //println!("b2={}", b2);
@@ -127,7 +142,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl Fn
                     a0 = a2;
                 }
                 Mode::Extension => {
-                    let xxx = reader.peek(3).unwrap();
+                    let _xxx = reader.peek(3).unwrap();
                     //println!("extension: {:03b}", xxx);
                     reader.consume(3);
                     //println!("{:?}", current);

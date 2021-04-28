@@ -1,6 +1,5 @@
-use fax::{VecWriter, encoder::Encoder, BitWriter, Bits, Color, ByteReader, BitReader};
-use std::io::Write;
-use std::fs::{self, File};
+use fax::{encoder::Encoder, BitWriter, Bits, Color, ByteReader, BitReader};
+use std::fs;
 
 fn main() {
     let mut args = std::env::args().skip(1);

@@ -1,6 +1,5 @@
-use fax::{VecWriter, encoder::Encoder, BitWriter, Bits, Color, ByteReader, BitReader, tiff};
-use std::io::Write;
-use std::fs::{self, File};
+use fax::{VecWriter, encoder::Encoder, Color, ByteReader, tiff};
+use std::fs;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -17,8 +16,7 @@ fn main() {
     let writer = VecWriter::new();
     let mut encoder = Encoder::new(writer);
     
-    for (y, line) in parts.next().unwrap().chunks((width as usize + 7) / 8).enumerate() {
-        //println!("\nline {}", y);
+    for line in parts.next().unwrap().chunks((width as usize + 7) / 8) {
         let line = ByteReader::new(line.iter().cloned()).into_bits().take(width as usize)
         .map(|b| match b {
             false => Color::White,
@@ -26,6 +24,6 @@ fn main() {
         });
         encoder.encode_line(line, width as u16);
     }
-    let (data, _) = encoder.finish().finish();
+    let data = encoder.finish().finish();
     fs::write(&output, &tiff::wrap(&data, width, height)).unwrap();
 }

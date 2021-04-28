@@ -1,6 +1,5 @@
-use fax::{VecWriter, encoder::Encoder, BitWriter, Bits, Color, ByteReader, BitReader};
-use std::io::Write;
-use std::fs::{self, File};
+use fax::{BitWriter, Bits, ByteReader, BitReader};
+use std::fs;
 
 struct Validator<R: Iterator<Item=u8>> {
     reader: ByteReader<R>

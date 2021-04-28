@@ -47,7 +47,6 @@ impl<W: BitWriter> Encoder<W> {
         }
     }
     pub fn encode_line(&mut self, pels: impl Iterator<Item=Color>, width: u16) {
-        let mut pos = 0;
         let mut color = Color::White;
         let mut transitions = Transitions::new(&self.reference);
         let mut a0 = 0;
@@ -72,7 +71,7 @@ impl<W: BitWriter> Encoder<W> {
                 let b2 = transitions.peek();
                 //println!("b1={:?}, b2={:?}", b1, b2);
                 match (b1, b2) {
-                    (Some(b1), Some(b2)) if b2 < a1 => {
+                    (Some(_b1), Some(b2)) if b2 < a1 => {
                         //println!("Pass");
                         let bits = mode::encode(Mode::Pass).unwrap();
                         writer.write(bits);

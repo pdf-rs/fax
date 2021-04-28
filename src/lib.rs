@@ -1,15 +1,33 @@
 use std::ops::Not;
 use std::fmt;
-use std::io::Write;
 
 mod maps;
+
+/// Decoder module
 pub mod decoder;
+
+/// Encoder module
 pub mod encoder;
+
+/// TIFF helper functions
 pub mod tiff;
 
+/// Trait used to read data bitwise.
+/// 
+/// For lazy people `ByteReader` is provided which implements this trait.
 pub trait BitReader {
+    /// look at the next (up to 16) bits of data
+    /// 
+    /// Data is returned in the lower bits of the `u16`.
     fn peek(&self, bits: u8) -> Option<u16>;
+
+    /// Consume the given amount of bits from the input.
     fn consume(&mut self, bits: u8);
+
+    /// Assert that the next bits matches the given pattern.
+    /// 
+    /// If it does not match, the found pattern is returned if enough bits are aviable.
+    /// Otherwise None is returned.
     fn expect(&mut self, bits: Bits) -> Result<(), Option<Bits>> {
         match self.peek(bits.len) {
             None => Err(None),
@@ -18,6 +36,10 @@ pub trait BitReader {
         }
     }
 }
+
+/// Trait to write data bitwise
+/// 
+/// The `VecWriter` struct is provided for convinience.
 pub trait BitWriter {
     fn write(&mut self, bits: Bits);
 }
@@ -53,6 +75,8 @@ impl VecWriter {
             len: 0
         }
     }
+
+    /// Pad the output with `0` bits until it is at a byte boundary.
     pub fn pad(&mut self) {
         if self.len > 0 {
             self.data.push((self.partial >> 24) as u8);
@@ -60,12 +84,11 @@ impl VecWriter {
             self.len = 0;
         }
     }
-    pub fn finish(mut self) -> (Vec<u8>, usize) {
-        if self.len > 0 {
-            self.data.push((self.partial >> 24) as u8);
-        }
-        let len = self.data.len() * 8 + self.len as usize;
-        (self.data, len)
+
+    /// pad and return the accumulated bytes
+    pub fn finish(mut self) -> Vec<u8> {
+        self.pad();
+        self.data
     }
 }
 
@@ -75,6 +98,7 @@ pub struct ByteReader<R> {
     valid: u8,
 }
 impl<R: Iterator<Item=u8>> ByteReader<R> {
+    /// Construct a new `ByteReader` from an iterator of `u8`
     pub fn new(read: R) -> Self {
         let mut bits = ByteReader {
             read,
@@ -96,11 +120,15 @@ impl<R: Iterator<Item=u8>> ByteReader<R> {
     }
 }
 impl<'a> ByteReader<std::iter::Cloned<std::slice::Iter<'a, u8>>> {
+    /// Construct a new `ByteReader` from a slice of bytes.
     pub fn from_slice(slice: &'a [u8]) -> Self {
         ByteReader::new(slice.iter().cloned())
     }
 }
 impl<'a, R: Iterator<Item=u8> + 'a> ByteReader<R> {
+    /// Turn the reader into an iterator of bits.
+    /// 
+    /// Yields one `bool` per bit, `1=true` and `0=false`.
     pub fn into_bits(mut self) -> impl Iterator<Item=bool> + 'a {
         std::iter::from_fn(move || {
             let bit = self.peek(1)? == 1;
@@ -109,9 +137,9 @@ impl<'a, R: Iterator<Item=u8> + 'a> ByteReader<R> {
         })
     }
     
-    fn print(&self) {
-        println!("partial: {:0w$b}, valid: {}", self.partial, self.valid, w=self.valid as usize);
-    }
+    /// Print the remaining data
+    /// 
+    /// Note: For debug purposes only, not part of the API.
     pub fn print_remaining(&mut self) {
         println!("partial: {:0w$b}, valid: {}", self.partial, self.valid, w=self.valid as usize);
         for b in self.read.by_ref() {
@@ -132,10 +160,6 @@ impl<R: Iterator<Item=u8>> BitReader for ByteReader<R> {
         }
     }
     fn consume(&mut self, bits: u8) {
-        let shift = self.valid - bits;
-        let out = (self.partial >> shift) as u16;
-        //println!("consume: {:0w$b}", out, w=bits as usize);
-
         self.valid -= bits;
         self.partial &= (1<<self.valid)-1;
         self.fill();
@@ -148,6 +172,7 @@ fn test_bits() {
     assert_eq!(maps::black(&mut bits), Some(42));
 }
 
+/// Enum used to signal black/white.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Color {
     Black,
@@ -212,9 +237,6 @@ impl<'a> Transitions<'a> {
     }
     fn peek(&self) -> Option<u16> {
         self.edges.get(self.pos).cloned()
-    }
-    fn peek2(&self) -> Option<u16> {
-        self.edges.get(self.pos+1).cloned()
     }
     fn skip(&mut self, n: usize) {
         self.pos += n;

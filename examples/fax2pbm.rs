@@ -22,7 +22,7 @@ fn main() {
         writer.pad();
         height += 1;
     });
-    let (data, n_bits) = writer.finish();
+    let data = writer.finish();
     assert_eq!(data.len(), height as usize * ((width as usize + 7) / 8));
 
     let header = format!("P4\n{} {}\n", width, height);
