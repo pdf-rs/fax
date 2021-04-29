@@ -3,8 +3,9 @@ name = "fax"
 version = "0.1.0"
 authors = ["Sebastian K <s3bk@protonmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Decoder and Encoder for CCITT Group 3 and 4 bi-level image encodings used by fax machines TIFF and PDF."
+license = "MIT"
+keywords = ["CCITT", "fax", "CCITTFaxDecode"]
 
 [dependencies]
 fax_derive = { version = "0.1.0", path = "derive" }
