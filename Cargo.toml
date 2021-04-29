@@ -6,6 +6,7 @@ edition = "2018"
 description = "Decoder and Encoder for CCITT Group 3 and 4 bi-level image encodings used by fax machines TIFF and PDF."
 license = "MIT"
 keywords = ["CCITT", "fax", "CCITTFaxDecode"]
+repository = "https://github.com/pdf-rs/fax"
 
 [dependencies]
 fax_derive = { version = "0.1.0", path = "derive" }
