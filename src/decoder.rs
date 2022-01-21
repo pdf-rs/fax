@@ -160,8 +160,8 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl Fn
         std::mem::swap(&mut reference, &mut current);
         current.clear();
     }
-    reader.expect(EDFB_HALF).unwrap();
-    reader.expect(EDFB_HALF).unwrap();
+    //reader.expect(EDFB_HALF).unwrap();
+    //reader.expect(EDFB_HALF).unwrap();
     //reader.print();
 
     Some(())
