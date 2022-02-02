@@ -142,7 +142,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl Fn
                     a0 = a2;
                 }
                 Mode::Extension => {
-                    let _xxx = reader.peek(3).unwrap();
+                    let _xxx = reader.peek(3)?;
                     //println!("extension: {:03b}", xxx);
                     reader.consume(3);
                     //println!("{:?}", current);
@@ -160,8 +160,8 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl Fn
         std::mem::swap(&mut reference, &mut current);
         current.clear();
     }
-    //reader.expect(EDFB_HALF).unwrap();
-    //reader.expect(EDFB_HALF).unwrap();
+    reader.expect(EDFB_HALF).ok()?;
+    reader.expect(EDFB_HALF).ok()?;
     //reader.print();
 
     Some(())

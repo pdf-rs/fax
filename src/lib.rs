@@ -169,7 +169,7 @@ impl<R: Iterator<Item=u8>> BitReader for ByteReader<R> {
 #[test]
 fn test_bits() {
     let mut bits = ByteReader::new([0b0000_1101, 0b1010_0000].iter().cloned());
-    assert_eq!(maps::black(&mut bits), Some(42));
+    assert_eq!(maps::black::decode(&mut bits), Some(42));
 }
 
 /// Enum used to signal black/white.
