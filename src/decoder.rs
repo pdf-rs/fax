@@ -83,13 +83,17 @@ pub fn decode_g3(input: impl Iterator<Item=u8>, mut line_cb: impl FnMut(&[u16]))
 /// - The callback `line_cb` is called for each decoded line.
 ///   The argument is the list of positions of color change, starting with white.
 /// 
+///   If `height` is specified, at most that many lines will be decoded,
+///   otherwise data is decoded until the end-of-block marker (or end of data).
+/// 
 /// To obtain an iterator over the pixel colors, the `pels` function is provided.
-pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
+pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
     let mut reader = ByteReader::new(input);
     let mut reference: Vec<u16> = vec![];
     let mut current: Vec<u16> = vec![];
 
-    'outer: loop {
+    let limit = height.unwrap_or(u16::MAX);
+    'outer: for _ in 0 .. limit {
         let mut transitions = Transitions::new(&reference);
         let mut a0 = 0;
         let mut color = Color::White;
@@ -160,8 +164,10 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, mut line_cb: impl Fn
         std::mem::swap(&mut reference, &mut current);
         current.clear();
     }
-    reader.expect(EDFB_HALF).ok()?;
-    reader.expect(EDFB_HALF).ok()?;
+    if height.is_none() {
+        reader.expect(EDFB_HALF).ok()?;
+        reader.expect(EDFB_HALF).ok()?;
+    }
     //reader.print();
 
     Some(())
