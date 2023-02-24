@@ -11,7 +11,7 @@ fn main() {
     let data = fs::read(&input).unwrap();
     let mut writer = VecWriter::new();
     let mut height = 0;
-    decoder::decode_g4(data.iter().cloned(), width, |transitions| {
+    decoder::decode_g4(data.iter().cloned(), width, None,  |transitions| {
         for c in pels(transitions, width) {
             let bit = match c {
                 Color::Black => Bits { data: 1, len: 1 },
