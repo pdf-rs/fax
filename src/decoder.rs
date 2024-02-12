@@ -118,6 +118,9 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                 Mode::Vertical(delta) => {
                     let b1 = transitions.next_color(a0, !color).unwrap_or(width);
                     let a1 = (b1 as i16 + delta as i16) as u16;
+                    if a1 >= width {
+                        break;
+                    }
                     //println!("transition to {:?} at {}", !color, a1);
                     current.push(a1);
                     color = !color;
