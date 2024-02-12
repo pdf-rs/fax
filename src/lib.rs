@@ -35,6 +35,8 @@ pub trait BitReader {
             Some(val) => Err(Some(Bits { data: val, len: bits.len }))
         }
     }
+
+    fn bits_to_byte_boundary(&self) -> u8;
 }
 
 /// Trait to write data bitwise
@@ -153,7 +155,7 @@ impl<R: Iterator<Item=u8>> BitReader for ByteReader<R> {
         assert!(bits <= 16);
         if self.valid >= bits {
             let shift = self.valid - bits;
-            let out = (self.partial >> shift) as u16;
+            let out = (self.partial >> shift) as u16 & ((1 << bits) - 1);
             Some(out)
         } else {
             None
@@ -161,8 +163,10 @@ impl<R: Iterator<Item=u8>> BitReader for ByteReader<R> {
     }
     fn consume(&mut self, bits: u8) {
         self.valid -= bits;
-        self.partial &= (1<<self.valid)-1;
         self.fill();
+    }
+    fn bits_to_byte_boundary(&self) -> u8 {
+        self.valid & 7
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{ByteReader, BitReader, Color, Transitions};
+use crate::{BitReader, ByteReader, Color, Transitions};
 use crate::maps::{Mode, black, white, mode, EDFB_HALF, EOL};
 
 
@@ -30,7 +30,7 @@ fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
 /// The width of the line/image has to be given in `width`.
 /// The iterator will produce exactly that many items.
 pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item=Color> + '_ {
-    use std::iter::{repeat};
+    use std::iter::repeat;
     let mut color = Color::White;
     let mut last = 0;
     line.iter().flat_map(move |&p| {
@@ -100,14 +100,12 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
         //println!("\n\nline {}", y);
 
         loop {
-            //reader.print();
             let mode = match mode::decode(&mut reader) {
                 Some(mode) => mode,
                 None => break 'outer,
             };
-            //println!("{:?}, color={:?}, a0={}", mode, color, a0);
+            //println!("  {:?}, color={:?}, a0={}", mode, color, a0);
             
-
             match mode {
                 Mode::Pass => {
                     let _ = transitions.next_color(a0, !color)?;
@@ -118,10 +116,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                     }
                 }
                 Mode::Vertical(delta) => {
-                    let b1 = match transitions.next_color(a0, !color) {
-                        Some(p) => p,
-                        None => break
-                    };
+                    let b1 = transitions.next_color(a0, !color).unwrap_or(width);
                     let a1 = (b1 as i16 + delta as i16) as u16;
                     //println!("transition to {:?} at {}", !color, a1);
                     current.push(a1);
