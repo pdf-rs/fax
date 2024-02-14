@@ -33,13 +33,18 @@ pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item=Color> + '_ {
     use std::iter::repeat;
     let mut color = Color::White;
     let mut last = 0;
+    let pad_color = if line.len() & 1 == 1 {
+        !color
+    } else { 
+        color
+    };
     line.iter().flat_map(move |&p| {
         let c = color;
         color = !color;
         let n = p.saturating_sub(last);
         last = p;
         repeat(c).take(n as usize)
-    }).chain(repeat(color)).take(width as usize)
+    }).chain(repeat(pad_color)).take(width as usize)
 }
 
 /// Decode a Group 3 encoded image.
@@ -97,8 +102,9 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
         let mut transitions = Transitions::new(&reference);
         let mut a0 = 0;
         let mut color = Color::White;
+        let mut start_of_row = true;
         //println!("\n\nline {}", y);
-
+        
         loop {
             let mode = match mode::decode(&mut reader) {
                 Some(mode) => mode,
@@ -108,7 +114,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
             
             match mode {
                 Mode::Pass => {
-                    let _ = transitions.next_color(a0, !color)?;
+                    let _ = transitions.next_color(a0, !color, start_of_row)?;
                     //println!("b1={}", b1);
                     if let Some(b2) = transitions.next() {
                         //println!("b2={}", b2);
@@ -116,7 +122,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                     }
                 }
                 Mode::Vertical(delta) => {
-                    let b1 = transitions.next_color(a0, !color).unwrap_or(width);
+                    let b1 = transitions.next_color(a0, !color, start_of_row).unwrap_or(width);
                     let a1 = (b1 as i16 + delta as i16) as u16;
                     if a1 >= width {
                         break;
@@ -151,6 +157,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                     break 'outer;
                 }
             }
+            start_of_row = false;
 
             if a0 >= width {
                 break;

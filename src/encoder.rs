@@ -50,6 +50,7 @@ impl<W: BitWriter> Encoder<W> {
         let mut color = Color::White;
         let mut transitions = Transitions::new(&self.reference);
         let mut a0 = 0;
+        let mut start_of_row = true;
         let mut pels = pels.enumerate()
         .scan(Color::White, |state, (i, c)| {
             Some(if c != *state {
@@ -67,8 +68,10 @@ impl<W: BitWriter> Encoder<W> {
             self.current.push(a1);
             loop {
                 transitions.seek_back(a0);
-                let b1 = transitions.next_color(a0, !color);
+                let b1 = transitions.next_color(a0, !color, start_of_row);
                 let b2 = transitions.peek();
+
+                start_of_row = false;
                 //println!("b1={:?}, b2={:?}", b1, b2);
                 match (b1, b2) {
                     (Some(_b1), Some(b2)) if b2 < a1 => {
@@ -110,7 +113,7 @@ impl<W: BitWriter> Encoder<W> {
         }
         transitions.seek_back(a0);
         loop {
-            let b1 = transitions.next_color(a0, !color);
+            let b1 = transitions.next_color(a0, !color, start_of_row);
             let b2 = transitions.peek();
             //println!("b1={:?}, b2={:?}", b1, b2);
             if let Some(b1) = b1 {

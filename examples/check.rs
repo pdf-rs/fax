@@ -3,7 +3,6 @@
 use fax::{VecWriter, decoder, decoder::pels, BitWriter, Bits, Color};
 use std::io::Write;
 use std::fs::{self, File};
-use itertools::Itertools;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -25,7 +24,6 @@ fn main() {
     let data = fs::read(&input).unwrap();
     let mut height = 0;
     decoder::decode_g4(data.iter().cloned(), width, None,  |transitions| {
-        println!("line {height}");
         let mut writer = VecWriter::new();
         for c in pels(transitions, width) {
             let bit = match c {
@@ -38,9 +36,21 @@ fn main() {
         height += 1;
         let data = writer.finish();
         let ref_line = ref_lines.next().unwrap();
-        println!("ref: {:08b}", ref_line.iter().format(" "));
-        println!("dec: {:08b}", data.iter().format(" "));
-        println!();
-        assert_eq!(ref_line, data);
+        println!("{height:3} dec: {}", Line(&data));
+        if ref_line != data {
+            println!("    ref: {}", Line(ref_line));
+            panic!("decode error");
+        }
     });
+}
+
+struct Line<'a>(&'a [u8]);
+impl<'a> std::fmt::Display for Line<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {       
+        let codes = [' ', '▐', '▌', '█'];
+        for b in self.0.iter().flat_map(|b| [b >> 6, (b >> 4) & 3, (b >>2) & 3, b & 3]) {
+            write!(f, "{}", codes[b as usize])?;
+        }
+        Ok(())
+    }
 }

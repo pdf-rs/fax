@@ -209,7 +209,14 @@ impl<'a> Transitions<'a> {
             }
         }
     }
-    fn next_color(&mut self, start: u16, color: Color) -> Option<u16> {
+    fn next_color(&mut self, start: u16, color: Color, start_of_row: bool) -> Option<u16> {
+        if start_of_row {
+            if color == Color::Black {
+                return self.edges.get(0).cloned()
+            } else {
+                return self.edges.get(1).cloned()
+            }
+        }
         while self.pos < self.edges.len() {
             if self.edges[self.pos] <= start {
                 self.pos += 1;
