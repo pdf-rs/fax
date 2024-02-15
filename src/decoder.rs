@@ -114,7 +114,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
             
             match mode {
                 Mode::Pass => {
-                    let _ = transitions.next_color(a0, !color, start_of_row)?;
+                    let _ = transitions.next_color(a0, !color, false)?;
                     //println!("b1={}", b1);
                     if let Some(b2) = transitions.next() {
                         //println!("b2={}", b2);
@@ -173,7 +173,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
         reader.expect(EDFB_HALF).ok()?;
         reader.expect(EDFB_HALF).ok()?;
     }
-    //reader.print();
+    //reader.print_remaining();
 
     Some(())
 }
