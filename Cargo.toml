@@ -1,6 +1,6 @@
 [package]
 name = "fax"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Sebastian K <s3bk@protonmail.com>"]
 edition = "2018"
 description = "Decoder and Encoder for CCITT Group 3 and 4 bi-level image encodings used by fax machines TIFF and PDF."
