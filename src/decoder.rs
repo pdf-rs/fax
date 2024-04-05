@@ -156,9 +156,9 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                 }
                 Mode::Extension => {
                     let xxx = reader.peek(3)?;
-                    println!("extension: {:03b}", xxx);
+                    // println!("extension: {:03b}", xxx);
                     reader.consume(3);
-                    println!("{:?}", current);
+                    // println!("{:?}", current);
                     break 'outer;
                 }
                 Mode::EOF => break 'outer,
@@ -178,7 +178,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
     if height.is_none() {
         reader.expect(EDFB_HALF).ok()?;
     }
-    reader.print_remaining();
+    // reader.print_remaining();
 
     Some(())
 }
