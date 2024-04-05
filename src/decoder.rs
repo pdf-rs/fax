@@ -18,7 +18,7 @@ fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
 }
 
 fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
-    //print!("{:?} ", current);
+    //println!("{:?}", current);
     match current {
         Color::Black => with_markup(black::decode, reader),
         Color::White => with_markup(white::decode, reader),
@@ -98,7 +98,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
     let mut current: Vec<u16> = vec![];
 
     let limit = height.unwrap_or(u16::MAX);
-    'outer: for _ in 0 .. limit {
+    'outer: for y in 0 .. limit {
         let mut transitions = Transitions::new(&reference);
         let mut a0 = 0;
         let mut color = Color::White;
@@ -106,6 +106,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
         //println!("\n\nline {}", y);
         
         loop {
+            //reader.print_peek();
             let mode = match mode::decode(&mut reader) {
                 Some(mode) => mode,
                 None => break 'outer,
@@ -114,7 +115,11 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
             
             match mode {
                 Mode::Pass => {
-                    let _ = transitions.next_color(a0, !color, false)?;
+                    if start_of_row && color == Color::White {
+                        transitions.pos += 1;
+                    } else {
+                        transitions.next_color(a0, !color, false)?;
+                    }
                     //println!("b1={}", b1);
                     if let Some(b2) = transitions.next() {
                         //println!("b2={}", b2);
@@ -150,12 +155,13 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                     a0 = a2;
                 }
                 Mode::Extension => {
-                    let _xxx = reader.peek(3)?;
-                    //println!("extension: {:03b}", xxx);
+                    let xxx = reader.peek(3)?;
+                    println!("extension: {:03b}", xxx);
                     reader.consume(3);
-                    //println!("{:?}", current);
+                    println!("{:?}", current);
                     break 'outer;
                 }
+                Mode::EOF => break 'outer,
             }
             start_of_row = false;
 
@@ -171,9 +177,8 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
     }
     if height.is_none() {
         reader.expect(EDFB_HALF).ok()?;
-        reader.expect(EDFB_HALF).ok()?;
     }
-    //reader.print_remaining();
+    reader.print_remaining();
 
     Some(())
 }

@@ -2,7 +2,6 @@ use fax_derive::bitmaps;
 use crate::{BitReader, Bits};
 
 enum Entry<T: Copy + 'static> {
-    Empty,
     Leaf(u8, &'static [Option<(T, u8)>]),
     Value(T, u8),
     Prefix(u8, &'static [Entry<T>])
@@ -10,7 +9,6 @@ enum Entry<T: Copy + 'static> {
 impl<T: Copy> Entry<T> {
     fn find(&self, reader: &mut impl BitReader) -> Option<T> {
         match *self {
-            Entry::Empty => None,
             Entry::Value(val, len) => {
                 reader.consume(len);
                 Some(val)
@@ -25,7 +23,6 @@ impl<T: Copy> Entry<T> {
                 let index = reader.peek(width)?;
                 let entry = &lut[index as usize];
                 match *entry {
-                    Entry::Empty => None,
                     Entry::Value(val, len) => {
                         reader.consume(len);
                         Some(val)
@@ -49,6 +46,7 @@ pub enum Mode {
     Horizontal,
     Vertical(i8),
     Extension,
+    EOF,
 }
 
 bitmaps! {
@@ -63,6 +61,7 @@ bitmaps! {
         000010 => Mode::Vertical(-2),
         0000010 => Mode::Vertical(-3),
         0000001 => Mode::Extension,
+        000000000001 => Mode::EOF,
     },
     black {
         0000110111 => 0,

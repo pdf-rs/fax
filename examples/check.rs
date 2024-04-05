@@ -21,26 +21,59 @@ fn main() {
 
     let mut ref_lines = ref_image.chunks_exact((width as usize + 7) / 8);
 
-    let data = fs::read(&input).unwrap();
+    let data;
+    let inverted;
+    if input.ends_with(".tiff") {
+        use tiff::{decoder::Decoder, tags::Tag};
+        let tiff = std::fs::read(&input).unwrap();
+        let reader = std::io::Cursor::new(tiff.as_slice());
+        let mut decoder = Decoder::new(reader).unwrap();
+        let (w, h) = decoder.chunk_dimensions();
+        let mut buf = vec![0; w as usize * h as usize];
+        let strip_offset = decoder.get_tag(Tag::StripOffsets).unwrap().into_u32().unwrap() as usize;
+        let strip_bytes = decoder.get_tag(Tag::StripByteCounts).unwrap().into_u32().unwrap() as usize;
+
+        let interpr = decoder.get_tag(Tag::PhotometricInterpretation).unwrap().into_u16().unwrap();
+
+        data = tiff[strip_offset .. strip_offset + strip_bytes].to_vec();
+        inverted = interpr != 0;
+    } else {    
+        data = fs::read(&input).unwrap();
+        inverted = false;
+    }
     let mut height = 0;
+    let (black, white) = match inverted {
+        false => (Bits { data: 1, len: 1 }, Bits { data: 0, len: 1 }),
+        true => (Bits { data: 0, len: 1 }, Bits { data: 1, len: 1 })
+    };
     decoder::decode_g4(data.iter().cloned(), width, None,  |transitions| {
         let mut writer = VecWriter::new();
         for c in pels(transitions, width) {
             let bit = match c {
-                Color::Black => Bits { data: 1, len: 1 },
-                Color::White => Bits { data: 0, len: 1 }
+                Color::Black => black,
+                Color::White => white,
             };
             writer.write(bit);
         }
         writer.pad();
-        height += 1;
         let data = writer.finish();
         let ref_line = ref_lines.next().unwrap();
         println!("{height:3} dec: {}", Line(&data));
         if ref_line != data {
             println!("    ref: {}", Line(ref_line));
+            'a: for (byte, (&r, &v)) in ref_line.iter().zip(data.iter()).enumerate() {
+                if r != v {
+                    for i in (0 .. 8).rev() {
+                        if r & (1 << i) != v & (1 << i) {
+                            println!("mismatch at pos {}", (8 * byte) + 7-i);
+                            break 'a;
+                        }
+                    }
+                }
+            }
             panic!("decode error");
         }
+        height += 1;
     });
 }
 

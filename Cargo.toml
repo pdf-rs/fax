@@ -10,3 +10,6 @@ repository = "https://github.com/pdf-rs/fax"
 
 [dependencies]
 fax_derive = { version = "0.1.0", path = "derive" }
+
+[dev-dependencies]
+tiff = { verison = "0.9" }

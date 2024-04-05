@@ -143,11 +143,14 @@ impl<'a, R: Iterator<Item=u8> + 'a> ByteReader<R> {
     /// 
     /// Note: For debug purposes only, not part of the API.
     pub fn print_remaining(&mut self) {
-        println!("partial: {:0w$b}, valid: {}", self.partial, self.valid, w=self.valid as usize);
+        println!("partial: {:0w$b}, valid: {}", self.partial & ((1 << self.valid) - 1), self.valid, w=self.valid as usize);
         for b in self.read.by_ref() {
             print!("{:08b} ", b);
         }
         println!();
+    }
+    pub fn print_peek(&self) {
+        println!("partial: {:0w$b}, valid: {}", self.partial & ((1 << self.valid) - 1), self.valid, w=self.valid as usize);
     }
 }
 impl<R: Iterator<Item=u8>> BitReader for ByteReader<R> {
