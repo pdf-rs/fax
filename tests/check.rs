@@ -1,5 +1,6 @@
 #![feature(slice_split_once)]
 
+use fax::{encoder, BitReader, ByteReader};
 use fax::{VecWriter, decoder, decoder::pels, BitWriter, Bits, Color};
 use std::io::Write;
 use std::fs::{self, File};
@@ -17,16 +18,17 @@ fn main() {
 
         let base = data_path.join(p.file_stem().unwrap());
         let pbm = base.with_extension("pbm");
-        let success = if p.extension().is_some_and(|e| e == "fax") {
+        let r = if p.extension().is_some_and(|e| e == "fax") {
             read_pbm(&pbm).test_fax(&p)
         } else if p.extension().is_some_and(|e| e == "tiff") {
             read_pbm(&pbm).test_tiff(&p)
         } else {
             continue;
-        };
-        println!("{base:?} {success:?}");
-        if !success {
+        };  
+        println!("{base:?} {r:?}");
+        if r.is_err() {
             fails.push(p);
+            break;
         }
     }
 
@@ -54,12 +56,12 @@ fn read_pbm(path: &Path) -> TestImage {
     TestImage { width, height: h, data: ref_image.to_vec() }
 }
 impl TestImage {
-    fn test_fax(&self, fax_path: &Path) -> bool {
+    fn test_fax(&self, fax_path: &Path) -> Result<(), ()> {
         let data = fs::read(fax_path).unwrap();
         self.test_stream(&data, false)
     }
 
-    fn test_tiff(&self, path: &Path) -> bool {
+    fn test_tiff(&self, path: &Path) -> Result<(), ()> {
         use tiff::{decoder::Decoder, tags::Tag};
         let data = std::fs::read(path).unwrap();
         let reader = std::io::Cursor::new(data.as_slice());
@@ -76,7 +78,7 @@ impl TestImage {
         self.test_stream(&data, white_is_1)
     }
 
-    fn test_stream(&self, data: &[u8], white_is_1: bool) -> bool {
+    fn test_stream(&self, data: &[u8], white_is_1: bool) -> Result<(), ()> {
         let mut ref_lines = self.data.chunks_exact((self.width as usize + 7) / 8);
 
         let (black, white) = match white_is_1 {
@@ -106,6 +108,59 @@ impl TestImage {
             height += 1;
         }).is_some();
 
-        ok && errors == 0
+        if errors > 0 {
+            println!("{} errors", errors);
+            return Err(());
+        }
+        if !ok {
+            println!("not ok");
+            return Err(());
+        }
+
+
+        fn pixels(line: &[u8], white_is_1: bool) -> impl Iterator<Item=Color> + '_ {
+            ByteReader::new(line.iter().cloned()).into_bits().map(move |b| if b ^ white_is_1 { Color::Black } else { Color::White })
+        }
+        let mut expected = ByteReader::new(data.iter().cloned());
+        let mut encoder = encoder::Encoder::new(TestWriter { expected: &mut expected, offset: 0 });
+        let ref_lines = self.data.chunks_exact((self.width as usize + 7) / 8);
+        let mut fail = false;
+        for (i, line) in ref_lines.enumerate() {
+            //println!("Line {i}");
+            //println!("{:08b} {:08b}", line[0], line[1]);
+            if encoder.encode_line(pixels(line, white_is_1), self.width).is_err() {
+                fail = i < height as _;
+                break;
+            }
+        }
+        
+        dbg!(fax::maps::mode::decode(&mut expected));
+
+        if fail {
+            return Err(());
+        }
+        Ok(())
+    }
+}
+
+struct TestWriter<'a, R> {
+    offset: usize,
+    expected: &'a mut ByteReader<R>,
+}
+impl<'a, R> BitWriter for TestWriter<'a, R> where R: Iterator<Item=u8> {
+    type Error = (usize, u8);
+    fn write(&mut self, bits: Bits) -> Result<(), Self::Error> {
+        match self.expected.expect(bits) {
+            Ok(()) => {
+                self.expected.consume(bits.len);
+            }
+            Err(_) => {
+                self.expected.print_peek();
+                println!("    @{}+{} found {}", self.offset/8, self.offset%8, bits);
+                return Err((self.offset / 8, (self.offset % 8) as u8));
+            },
+        }
+        self.offset += bits.len as usize;
+        Ok(())
     }
 }

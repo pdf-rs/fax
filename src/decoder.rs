@@ -10,7 +10,7 @@ fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
         //print!("{} ", n);
         sum += n;
         if n < 64 {
-            //println!("= {}", sum);
+            //debug!("= {}", sum);
             return Some(sum)
         }
     }
@@ -18,7 +18,7 @@ fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
 }
 
 fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
-    //println!("{:?}", current);
+    //debug!("{:?}", current);
     match current {
         Color::Black => with_markup(black::decode, reader),
         Color::White => with_markup(white::decode, reader),
@@ -103,7 +103,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
         let mut a0 = 0;
         let mut color = Color::White;
         let mut start_of_row = true;
-        //println!("\n\nline {}", y);
+        //debug!("\n\nline {}", y);
         
         loop {
             //reader.print_peek();
@@ -111,7 +111,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                 Some(mode) => mode,
                 None => break 'outer,
             };
-            //println!("  {:?}, color={:?}, a0={}", mode, color, a0);
+            //debug!("  {:?}, color={:?}, a0={}", mode, color, a0);
             
             match mode {
                 Mode::Pass => {
@@ -120,9 +120,9 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                     } else {
                         transitions.next_color(a0, !color, false)?;
                     }
-                    //println!("b1={}", b1);
+                    //debug!("b1={}", b1);
                     if let Some(b2) = transitions.next() {
-                        //println!("b2={}", b2);
+                        //debug!("b2={}", b2);
                         a0 = b2;
                     }
                 }
@@ -132,7 +132,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                     if a1 >= width {
                         break;
                     }
-                    //println!("transition to {:?} at {}", !color, a1);
+                    //debug!("transition to {:?} at {}", !color, a1);
                     current.push(a1);
                     color = !color;
                     a0 = a1;
@@ -145,7 +145,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                     let a1a2 = colored(!color, &mut reader)?;
                     let a1 = a0 + a0a1;
                     let a2 = a1 + a1a2;
-                    //println!("a0a1={}, a1a2={}, a1={}, a2={}", a0a1, a1a2, a1, a2);
+                    //debug!("a0a1={}, a1a2={}, a1={}, a2={}", a0a1, a1a2, a1, a2);
                     
                     current.push(a1);
                     if a2 >= width {
@@ -156,9 +156,9 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                 }
                 Mode::Extension => {
                     let xxx = reader.peek(3)?;
-                    // println!("extension: {:03b}", xxx);
+                    // debug!("extension: {:03b}", xxx);
                     reader.consume(3);
-                    // println!("{:?}", current);
+                    // debug!("{:?}", current);
                     break 'outer;
                 }
                 Mode::EOF => break 'outer,
@@ -169,7 +169,7 @@ pub fn decode_g4(input: impl Iterator<Item=u8>, width: u16, height: Option<u16>,
                 break;
             }
         }
-        //println!("{:?}", current);
+        //debug!("{:?}", current);
 
         line_cb(&current);
         std::mem::swap(&mut reference, &mut current);

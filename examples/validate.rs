@@ -24,7 +24,7 @@ fn main() {
             false => Color::Black,
             true => Color::White
         });
-        encoder.encode_line(line, width);
+        encoder.encode_line(line, width).unwrap();
     }
     let mut writer = encoder.finish();
     writer.reader.print_remaining();
@@ -38,9 +38,14 @@ struct Validator<R: Iterator<Item=u8>> {
     reader: ByteReader<R>
 }
 impl<R: Iterator<Item=u8>> BitWriter for Validator<R> {
-    fn write(&mut self, bits: Bits) {
+    type Error = ();
+    fn write(&mut self, bits: Bits) -> Result<(), ()> {
         let expected = Bits { data: self.reader.peek(bits.len).unwrap(), len: bits.len };
-        assert_eq!(expected, bits);
+        if expected != bits {
+            println!("{} != {}", expected, bits);
+            return Err(());
+        }
         self.reader.consume(bits.len);
+        Ok(())
     }
 }

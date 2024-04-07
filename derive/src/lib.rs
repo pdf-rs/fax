@@ -316,7 +316,7 @@ impl<T: Copy + Default + Debug> Node<T> {
         Self::build_prefix(patterns, 0)
     }
     fn build_prefix(patterns: &[(T, Bits)], prefix: u8) -> Option<Node<T>> {
-        //println!("{:?}", patterns);
+        //debug!("{:?}", patterns);
         match patterns.len() {
             0 => None,
             1 => {
@@ -368,14 +368,14 @@ impl<T: Copy + Default + Debug> PrefixLut<T> {
         //dbg!(patterns);
         for &(val, bits) in patterns {
             let bits = bits.strip_prefix(prefix);
-            //println!("{} - {}bits ({:?})", bits, width, val);
+            //debug!("{} - {}bits ({:?})", bits, width, val);
 
             if bits.len >= width {
-                //println!(" = {}",  bits.strip_prefix(width));
+                //debug!(" = {}",  bits.strip_prefix(width));
                 slots[bits.prefix(width) as usize].push((val, bits));
             } else {
                 for k in bits.prefix_range(width) {
-                    //println!("  -> {}", k);
+                    //debug!("  -> {}", k);
                     slots[k as usize].push((val, bits));
                 }
             }

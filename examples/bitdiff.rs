@@ -1,16 +1,4 @@
-use fax::{BitWriter, Bits, ByteReader, BitReader};
 use std::fs;
-
-struct Validator<R: Iterator<Item=u8>> {
-    reader: ByteReader<R>
-}
-impl<R: Iterator<Item=u8>> BitWriter for Validator<R> {
-    fn write(&mut self, bits: Bits) {
-        let expected = Bits { data: self.reader.peek(bits.len).unwrap(), len: bits.len };
-        assert_eq!(expected, bits);
-        self.reader.consume(bits.len);
-    }
-}
 
 fn main() {
     let mut args = std::env::args().skip(1);

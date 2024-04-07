@@ -25,5 +25,6 @@ fn main() {
         encoder.encode_line(line, width as u16);
     }
     let data = encoder.finish().finish();
+
     fs::write(&output, &tiff::wrap(&data, width, height)).unwrap();
 }
