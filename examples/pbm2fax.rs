@@ -1,4 +1,4 @@
-use fax::{VecWriter, encoder::Encoder, Color, ByteReader, tiff};
+use fax::{encoder::Encoder, slice_bits, tiff, ByteReader, Color, VecWriter};
 use std::fs;
 
 fn main() {
@@ -16,15 +16,15 @@ fn main() {
     let writer = VecWriter::new();
     let mut encoder = Encoder::new(writer);
     
-    for line in parts.next().unwrap().chunks((width as usize + 7) / 8) {
-        let line = ByteReader::new(line.iter().cloned()).into_bits().take(width as usize)
+    for line in parts.next().unwrap().chunks((width as usize + 7) / 8).take(height as _) {
+        let line = slice_bits(line).take(width as usize)
         .map(|b| match b {
             false => Color::White,
             true => Color::Black
         });
-        encoder.encode_line(line, width as u16);
+        encoder.encode_line(line, width as u16).unwrap();
     }
-    let data = encoder.finish().finish();
+    let data = encoder.finish().unwrap().finish();
 
     fs::write(&output, &tiff::wrap(&data, width, height)).unwrap();
 }

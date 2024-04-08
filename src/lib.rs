@@ -1,4 +1,6 @@
 use std::convert::Infallible;
+use std::io::{self, Read};
+use std::iter::Map;
 use std::ops::Not;
 use std::fmt;
 
@@ -30,13 +32,15 @@ pub mod tiff;
 /// 
 /// For lazy people `ByteReader` is provided which implements this trait.
 pub trait BitReader {
+    type Error;
+
     /// look at the next (up to 16) bits of data
     /// 
     /// Data is returned in the lower bits of the `u16`.
     fn peek(&self, bits: u8) -> Option<u16>;
 
     /// Consume the given amount of bits from the input.
-    fn consume(&mut self, bits: u8);
+    fn consume(&mut self, bits: u8) -> Result<(), Self::Error>;
 
     /// Assert that the next bits matches the given pattern.
     /// 
@@ -116,61 +120,55 @@ pub struct ByteReader<R> {
     partial: u32,
     valid: u8,
 }
-impl<R: Iterator<Item=u8>> ByteReader<R> {
+impl<E, R: Iterator<Item=Result<u8, E>>> ByteReader<R> {
     /// Construct a new `ByteReader` from an iterator of `u8`
-    pub fn new(read: R) -> Self {
+    pub fn new(read: R) -> Result<Self, E> {
         let mut bits = ByteReader {
             read,
             partial: 0,
             valid: 0
         };
-        bits.fill();
-        bits
+        bits.fill()?;
+        Ok(bits)
     }
-    fn fill(&mut self) {
+    fn fill(&mut self) -> Result<(), E> {
         while self.valid < 16 {
-            if let Some(byte) = self.read.next() {
-                self.partial = self.partial << 8 | byte as u32;
-                self.valid += 8;
-            } else {
-                break
+            match self.read.next() {
+                Some(Ok(byte)) => {
+                    self.partial = self.partial << 8 | byte as u32;
+                    self.valid += 8;
+                }
+                Some(Err(e)) => return Err(e),
+                None => break
             }
         }
+        Ok(())
     }
-}
-impl<'a> ByteReader<std::iter::Cloned<std::slice::Iter<'a, u8>>> {
-    /// Construct a new `ByteReader` from a slice of bytes.
-    pub fn from_slice(slice: &'a [u8]) -> Self {
-        ByteReader::new(slice.iter().cloned())
-    }
-}
-impl<'a, R: Iterator<Item=u8> + 'a> ByteReader<R> {
-    /// Turn the reader into an iterator of bits.
-    /// 
-    /// Yields one `bool` per bit, `1=true` and `0=false`.
-    pub fn into_bits(mut self) -> impl Iterator<Item=bool> + 'a {
-        std::iter::from_fn(move || {
-            let bit = self.peek(1)? == 1;
-            self.consume(1);
-            Some(bit)
-        })
-    }
-    
     /// Print the remaining data
     /// 
     /// Note: For debug purposes only, not part of the API.
     pub fn print_remaining(&mut self) {
-        debug!("partial: {:0w$b}, valid: {}", self.partial & ((1 << self.valid) - 1), self.valid, w=self.valid as usize);
-        for b in self.read.by_ref() {
+        println!("partial: {:0w$b}, valid: {}", self.partial & ((1 << self.valid) - 1), self.valid, w=self.valid as usize);
+        while let Some(Ok(b)) = self.read.next() {
             print!("{:08b} ", b);
         }
-        debug!();
+        println!();
     }
     pub fn print_peek(&self) {
-        debug!("partial: {:0w$b}, valid: {}", self.partial & ((1 << self.valid) - 1), self.valid, w=self.valid as usize);
+        println!("partial: {:0w$b}, valid: {}", self.partial & ((1 << self.valid) - 1), self.valid, w=self.valid as usize);
     }
 }
-impl<R: Iterator<Item=u8>> BitReader for ByteReader<R> {
+
+pub fn slice_reader(slice: &[u8]) -> ByteReader<impl Iterator<Item=Result<u8, Infallible>> + '_> {
+    ByteReader::new(slice.iter().cloned().map(Ok)).unwrap()
+}
+pub fn slice_bits(slice: &[u8]) -> impl Iterator<Item=bool> + '_ {
+    slice.iter().flat_map(|&b| [7,6,5,4,3,2,1,0].map(|i| (b >> i) & 1 != 0))
+}
+
+impl<E, R: Iterator<Item=Result<u8, E>>> BitReader for ByteReader<R> {
+    type Error = E;
+
     fn peek(&self, bits: u8) -> Option<u16> {
         assert!(bits <= 16);
         if self.valid >= bits {
@@ -181,18 +179,19 @@ impl<R: Iterator<Item=u8>> BitReader for ByteReader<R> {
             None
         }
     }
-    fn consume(&mut self, bits: u8) {
+    fn consume(&mut self, bits: u8) -> Result<(), E> {
         self.valid -= bits;
-        self.fill();
+        self.fill()
     }
     fn bits_to_byte_boundary(&self) -> u8 {
         self.valid & 7
     }
 }
 
+
 #[test]
 fn test_bits() {
-    let mut bits = ByteReader::new([0b0000_1101, 0b1010_0000].iter().cloned());
+    let mut bits = slice_reader(&[0b0000_1101, 0b1010_0000]);
     assert_eq!(maps::black::decode(&mut bits), Some(42));
 }
 

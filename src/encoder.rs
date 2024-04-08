@@ -126,9 +126,9 @@ impl<W: BitWriter> Encoder<W> {
         debug!("next line");
         Ok(())
     }
-    pub fn finish(mut self) -> W {
-        self.writer.write(EDFB_HALF);
-        self.writer.write(EDFB_HALF);
-        self.writer
+    pub fn finish(mut self) -> Result<W, W::Error> {
+        self.writer.write(EDFB_HALF)?;
+        self.writer.write(EDFB_HALF)?;
+        Ok(self.writer)
     }
 }

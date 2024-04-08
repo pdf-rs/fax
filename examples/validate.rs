@@ -1,5 +1,5 @@
-use fax::{encoder::Encoder, BitWriter, Bits, Color, ByteReader, BitReader};
-use std::fs;
+use fax::{encoder::Encoder, slice_bits, slice_reader, BitReader, BitWriter, Bits, ByteReader, Color};
+use std::{convert::Infallible, fs};
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -12,21 +12,22 @@ fn main() {
     assert_eq!(parts.next().unwrap(), b"P4");
     let mut size = parts.next().unwrap().splitn(2, |&b| b == b' ');
     let width: u16 = std::str::from_utf8(size.next().unwrap()).unwrap().parse().unwrap();
+    let height: u16 = std::str::from_utf8(size.next().unwrap()).unwrap().parse().unwrap();
 
     //let writer = VecWriter::new();
-    let writer = Validator { reader: ByteReader::from_slice(&reference_data) };
+    let writer = Validator { reader: slice_reader(&reference_data) };
     let mut encoder = Encoder::new(writer);
     
-    for (y, line) in parts.next().unwrap().chunks((width as usize + 7) / 8).enumerate() {
+    for (y, line) in parts.next().unwrap().chunks((width as usize + 7) / 8).enumerate().take(height as _) {
         println!("\nline {}", y);
-        let line = ByteReader::new(line.iter().cloned()).into_bits().take(width as usize)
+        let line = slice_bits(line).take(width as usize)
         .map(|b| match b {
             false => Color::Black,
             true => Color::White
         });
         encoder.encode_line(line, width).unwrap();
     }
-    let mut writer = encoder.finish();
+    let mut writer = encoder.finish().unwrap();
     writer.reader.print_remaining();
     
 
@@ -34,10 +35,12 @@ fn main() {
     //fs::write(&output, &data).unwrap();
 }
 
-struct Validator<R: Iterator<Item=u8>> {
+struct Validator<R> {
     reader: ByteReader<R>
 }
-impl<R: Iterator<Item=u8>> BitWriter for Validator<R> {
+impl<R> BitWriter for Validator<R> 
+where ByteReader<R>: BitReader
+{
     type Error = ();
     fn write(&mut self, bits: Bits) -> Result<(), ()> {
         let expected = Bits { data: self.reader.peek(bits.len).unwrap(), len: bits.len };

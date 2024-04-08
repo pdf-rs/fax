@@ -1,14 +1,15 @@
 #![feature(slice_split_once)]
 
-use fax::{encoder, BitReader, ByteReader};
+use fax::{encoder, slice_bits, slice_reader, BitReader, ByteReader};
 use fax::{VecWriter, decoder, decoder::pels, BitWriter, Bits, Color};
+use std::fmt::Debug;
 use std::io::Write;
 use std::fs::{self, File};
 use std::path::Path;
 
 #[test]
 fn main() {
-    let data_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("stream");
+    let data_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fax-test");
 
     let mut fails = vec![];
 
@@ -28,7 +29,6 @@ fn main() {
         println!("{base:?} {r:?}");
         if r.is_err() {
             fails.push(p);
-            break;
         }
     }
 
@@ -66,8 +66,6 @@ impl TestImage {
         let data = std::fs::read(path).unwrap();
         let reader = std::io::Cursor::new(data.as_slice());
         let mut decoder = Decoder::new(reader).unwrap();
-        let (w, h) = decoder.chunk_dimensions();
-        let mut buf = vec![0; w as usize * h as usize];
         let strip_offset = decoder.get_tag(Tag::StripOffsets).unwrap().into_u32().unwrap() as usize;
         let strip_bytes = decoder.get_tag(Tag::StripByteCounts).unwrap().into_u32().unwrap() as usize;
         decoder.goto_offset_u64(strip_offset as _).unwrap();
@@ -79,7 +77,7 @@ impl TestImage {
     }
 
     fn test_stream(&self, data: &[u8], white_is_1: bool) -> Result<(), ()> {
-        let mut ref_lines = self.data.chunks_exact((self.width as usize + 7) / 8);
+        let mut ref_lines = self.data.chunks_exact((self.width as usize + 7) / 8).take(self.height as _);
 
         let (black, white) = match white_is_1 {
             false => (Bits { data: 1, len: 1 }, Bits { data: 0, len: 1 }),
@@ -96,7 +94,7 @@ impl TestImage {
                     Color::Black => black,
                     Color::White => white
                 };
-                writer.write(bit);
+                writer.write(bit).unwrap();
             }
             writer.pad();
             let data = writer.finish();
@@ -119,17 +117,17 @@ impl TestImage {
 
 
         fn pixels(line: &[u8], white_is_1: bool) -> impl Iterator<Item=Color> + '_ {
-            ByteReader::new(line.iter().cloned()).into_bits().map(move |b| if b ^ white_is_1 { Color::Black } else { Color::White })
+            slice_bits(line).map(move |b| if b ^ white_is_1 { Color::Black } else { Color::White })
         }
-        let mut expected = ByteReader::new(data.iter().cloned());
+        let mut expected = slice_reader(data);
         let mut encoder = encoder::Encoder::new(TestWriter { expected: &mut expected, offset: 0 });
-        let ref_lines = self.data.chunks_exact((self.width as usize + 7) / 8);
+        let ref_lines = self.data.chunks_exact((self.width as usize + 7) / 8).take(self.height as _);
         let mut fail = false;
         for (i, line) in ref_lines.enumerate() {
-            //println!("Line {i}");
-            //println!("{:08b} {:08b}", line[0], line[1]);
+            println!("line {i}");
             if encoder.encode_line(pixels(line, white_is_1), self.width).is_err() {
-                fail = i < height as _;
+                println!("fail at line {i} of {}", self.height);
+                fail = true;
                 break;
             }
         }
@@ -147,16 +145,17 @@ struct TestWriter<'a, R> {
     offset: usize,
     expected: &'a mut ByteReader<R>,
 }
-impl<'a, R> BitWriter for TestWriter<'a, R> where R: Iterator<Item=u8> {
+impl<'a, E: Debug, R: Iterator<Item=Result<u8, E>>> BitWriter for TestWriter<'a, R> {
     type Error = (usize, u8);
     fn write(&mut self, bits: Bits) -> Result<(), Self::Error> {
         match self.expected.expect(bits) {
             Ok(()) => {
-                self.expected.consume(bits.len);
+                self.expected.consume(bits.len).unwrap();
             }
             Err(_) => {
                 self.expected.print_peek();
                 println!("    @{}+{} found {}", self.offset/8, self.offset%8, bits);
+                panic!();
                 return Err((self.offset / 8, (self.offset % 8) as u8));
             },
         }
