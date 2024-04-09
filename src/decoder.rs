@@ -150,7 +150,7 @@ impl<E> std::fmt::Display for DecodeError<E> {
 impl<E: std::error::Error> std::error::Error for DecodeError<E> {
 }
 
-struct Group4Decoder<R> {
+pub struct Group4Decoder<R> {
     reader: ByteReader<R>,
     reference: Vec<u16>,
     current: Vec<u16>,
