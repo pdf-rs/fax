@@ -173,7 +173,7 @@ impl<E, R: Iterator<Item=Result<u8, E>>> BitReader for ByteReader<R> {
         assert!(bits <= 16);
         if self.valid >= bits {
             let shift = self.valid - bits;
-            let out = (self.partial >> shift) as u16 & ((1 << bits) - 1);
+            let out = (self.partial >> shift) as u16 & ((1u32 << bits) - 1) as u16;
             Some(out)
         } else {
             None
@@ -193,6 +193,174 @@ impl<E, R: Iterator<Item=Result<u8, E>>> BitReader for ByteReader<R> {
 fn test_bits() {
     let mut bits = slice_reader(&[0b0000_1101, 0b1010_0000]);
     assert_eq!(maps::black::decode(&mut bits), Some(42));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a Group 3 bitstream from a sequence of bits.
+    fn bits_to_bytes(bits: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let mut byte = 0u8;
+        let mut count = 0;
+        for &b in bits {
+            byte = (byte << 1) | (b & 1);
+            count += 1;
+            if count == 8 {
+                bytes.push(byte);
+                byte = 0;
+                count = 0;
+            }
+        }
+        if count > 0 {
+            byte <<= 8 - count;
+            bytes.push(byte);
+        }
+        bytes
+    }
+
+    #[test]
+    fn test_group3_all_white_line() {
+        // Build a minimal Group 3 stream:
+        // - Initial EOL (000000000001)
+        // - Line 1: white(8) = 10011, EOL
+        // - RTC: 5 more EOLs
+        let mut stream_bits = Vec::new();
+
+        // Initial EOL
+        let eol: &[u8] = &[0,0,0,0,0,0,0,0,0,0,0,1];
+        stream_bits.extend_from_slice(eol);
+
+        // Line 1: white run of 8 pixels = 10011
+        stream_bits.extend_from_slice(&[1,0,0,1,1]);
+        // EOL after line 1
+        stream_bits.extend_from_slice(eol);
+
+        // RTC: 5 more EOLs
+        for _ in 0..5 {
+            stream_bits.extend_from_slice(eol);
+        }
+
+        let data = bits_to_bytes(&stream_bits);
+        let mut lines = Vec::new();
+        decoder::decode_g3(data.into_iter(), |transitions| {
+            lines.push(transitions.to_vec());
+        });
+
+        assert_eq!(lines.len(), 1, "expected 1 line, got {}", lines.len());
+        // All-white line: single transition at position 8 (white→black at the end)
+        // Actually, the run-length is 8 white pixels. The transitions list shows
+        // color change positions. For an all-white line, there are no transitions
+        // (white runs the full width). But the decoder adds a0 += p after each code,
+        // and pushes a0. For white(8), a0 = 8, pushed once. That's one transition.
+        assert_eq!(lines[0], vec![8]);
+    }
+
+    #[test]
+    fn test_group3_mixed_line() {
+        // Width 16: 4 white, 4 black, 8 white
+        // white(4) = 1011, black(4) = 011, white(8) = 10011
+        let mut stream_bits = Vec::new();
+
+        let eol: &[u8] = &[0,0,0,0,0,0,0,0,0,0,0,1];
+
+        // Initial EOL
+        stream_bits.extend_from_slice(eol);
+
+        // Line: white(4)=1011, black(4)=011, white(8)=10011
+        stream_bits.extend_from_slice(&[1,0,1,1]); // white 4
+        stream_bits.extend_from_slice(&[0,1,1]); // black 4
+        stream_bits.extend_from_slice(&[1,0,0,1,1]); // white 8
+        stream_bits.extend_from_slice(eol);
+
+        // RTC
+        for _ in 0..5 {
+            stream_bits.extend_from_slice(eol);
+        }
+
+        let data = bits_to_bytes(&stream_bits);
+        let mut lines = Vec::new();
+        decoder::decode_g3(data.into_iter(), |transitions| {
+            lines.push(transitions.to_vec());
+        });
+
+        assert_eq!(lines.len(), 1);
+        // Transitions: white(4) → position 4, black(4) → position 8, white(8) → position 16
+        assert_eq!(lines[0], vec![4, 8, 16]);
+    }
+
+    #[test]
+    fn test_group3_with_fill_bits() {
+        // Same as all_white test but with fill bits before each EOL.
+        // Fill bits pad with zeros to byte-align before the EOL.
+        let mut stream_bits = Vec::new();
+
+        let eol: &[u8] = &[0,0,0,0,0,0,0,0,0,0,0,1];
+
+        // Initial EOL with 4 fill bits (total 16 bits = 2 bytes)
+        stream_bits.extend_from_slice(&[0,0,0,0]); // fill
+        stream_bits.extend_from_slice(eol);
+
+        // Line: white(8) = 10011 (5 bits)
+        stream_bits.extend_from_slice(&[1,0,0,1,1]);
+        // EOL with 7 fill bits (5 + 7 + 12 = 24 bits = 3 bytes)
+        stream_bits.extend_from_slice(&[0,0,0,0,0,0,0]); // fill
+        stream_bits.extend_from_slice(eol);
+
+        // RTC with fill bits before each
+        for _ in 0..5 {
+            stream_bits.extend_from_slice(&[0,0,0,0]); // fill
+            stream_bits.extend_from_slice(eol);
+        }
+
+        let data = bits_to_bytes(&stream_bits);
+        let mut lines = Vec::new();
+        decoder::decode_g3(data.into_iter(), |transitions| {
+            lines.push(transitions.to_vec());
+        });
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], vec![8]);
+    }
+
+    #[test]
+    fn test_group3_multiple_lines() {
+        let mut stream_bits = Vec::new();
+        let eol: &[u8] = &[0,0,0,0,0,0,0,0,0,0,0,1];
+
+        // Initial EOL
+        stream_bits.extend_from_slice(eol);
+
+        // Line 1: white(4)=1011
+        stream_bits.extend_from_slice(&[1,0,1,1]);
+        stream_bits.extend_from_slice(eol);
+
+        // Line 2: white(8)=10011
+        stream_bits.extend_from_slice(&[1,0,0,1,1]);
+        stream_bits.extend_from_slice(eol);
+
+        // Line 3: white(2)=0111, black(3)=10
+        stream_bits.extend_from_slice(&[0,1,1,1]); // white 2
+        stream_bits.extend_from_slice(&[1,0]); // black 3
+        stream_bits.extend_from_slice(eol);
+
+        // RTC
+        for _ in 0..5 {
+            stream_bits.extend_from_slice(eol);
+        }
+
+        let data = bits_to_bytes(&stream_bits);
+        let mut lines = Vec::new();
+        decoder::decode_g3(data.into_iter(), |transitions| {
+            lines.push(transitions.to_vec());
+        });
+
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], vec![4]);
+        assert_eq!(lines[1], vec![8]);
+        assert_eq!(lines[2], vec![2, 5]); // white 2, then black 3 = positions 2, 5
+    }
 }
 
 /// Enum used to signal black/white.
