@@ -3,6 +3,7 @@ name = "fax_derive"
 version = "0.2.0"
 authors = ["Sebastian K <s3bk@protonmail.com>"]
 edition = "2018"
+rust-version = "1.71"
 description = "Bitstream matcher for the fax crate"
 license = "MIT"
 repository = "https://github.com/pdf-rs/fax"
