@@ -1,11 +1,14 @@
-#![feature(slice_split_once)]
-
 use fax::{encoder, slice_bits, slice_reader, BitReader, ByteReader};
 use fax::{VecWriter, decoder, decoder::pels, BitWriter, Bits, Color};
 use std::fmt::Debug;
 use std::io::Write;
 use std::fs::{self, File};
 use std::path::Path;
+
+fn split_once_byte(data: &[u8], needle: u8) -> Option<(&[u8], &[u8])> {
+    let pos = data.iter().position(|&b| b == needle)?;
+    Some((&data[..pos], &data[pos + 1..]))
+}
 
 #[test]
 fn main() {
@@ -45,9 +48,9 @@ struct TestImage {
 }
 fn read_pbm(path: &Path) -> TestImage {
     let ref_data = std::fs::read(path).unwrap();
-    let (header1, data) = ref_data.split_once(|&b| b == b'\n').unwrap();
+    let (header1, data) = split_once_byte(&ref_data, b'\n').unwrap();
     assert_eq!(header1, b"P4");
-    let (header2, ref_image) = data.split_once(|&b| b == b'\n').unwrap();
+    let (header2, ref_image) = split_once_byte(data, b'\n').unwrap();
     let header2 = std::str::from_utf8(header2).unwrap();
     let (w, h) = header2.split_once(" ").unwrap();
     let width: u16 = w.parse().unwrap();

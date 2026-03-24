@@ -45,7 +45,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Clippy
-        run: cargo clippy --lib
+        run: cargo clippy --all-targets
 
   msrv:
     name: MSRV (1.71)
