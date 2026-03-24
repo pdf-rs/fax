@@ -61,10 +61,13 @@ pub fn decode_g3(input: impl Iterator<Item=u8>, mut line_cb: impl FnMut(&[u16]))
     let mut decoder = Group3Decoder::new(reader).ok()?;
 
     while let Ok(status) = decoder.advance() {
+        // Always emit the decoded line before checking for end-of-document.
+        // The last line before the RTC (Return To Control) marker contains
+        // valid data that should not be dropped.
+        line_cb(decoder.transitions());
         if status == DecodeStatus::End {
             return Some(());
         }
-        line_cb(decoder.transitions());
     }
     None
 }
@@ -77,12 +80,13 @@ pub enum DecodeStatus {
 
 pub struct Group3Decoder<R> {
     reader: ByteReader<R>,
-    current: Vec<u16>
+    current: Vec<u16>,
 }
 impl<E: std::fmt::Debug, R: Iterator<Item=Result<u8, E>>> Group3Decoder<R> {
     pub fn new(reader: R) -> Result<Self, DecodeError<E>> {
         let mut reader = ByteReader::new(reader).map_err(DecodeError::Reader)?;
-        reader.expect(EOL).map_err(|_| DecodeError::Invalid)?;
+        // Skip any fill bits (zeros) then consume the initial EOL marker.
+        skip_to_eol(&mut reader).map_err(|_| DecodeError::Invalid)?;
 
         Ok(Group3Decoder { reader, current: vec![] })
     }
@@ -90,16 +94,29 @@ impl<E: std::fmt::Debug, R: Iterator<Item=Result<u8, E>>> Group3Decoder<R> {
         self.current.clear();
         let mut a0 = 0;
         let mut color = Color::White;
-        while let Some(p) = colored(color, &mut self.reader) {
-            a0 += p;
-            self.current.push(a0);
-            color = !color;
+        loop {
+            // Check for EOL before attempting to parse a run-length code.
+            // This prevents the prefix tree from destructively consuming
+            // EOL bits that it can't match as a valid code.
+            if is_eol_ahead(&self.reader) {
+                break;
+            }
+            match colored(color, &mut self.reader) {
+                Some(p) => {
+                    a0 += p;
+                    self.current.push(a0);
+                    color = !color;
+                }
+                None => break,
+            }
         }
-        self.reader.expect(EOL).map_err(|_| DecodeError::Invalid)?;
+        // Skip any fill bits and consume the EOL.
+        skip_to_eol(&mut self.reader).map_err(|_| DecodeError::Invalid)?;
 
-        for _ in 0 .. 6 {
-            if self.reader.peek(EOL.len) == Some(EOL.data) {
-                self.reader.consume(EOL.len).map_err(DecodeError::Reader)?;
+        // Check for end-of-document: 6 consecutive EOLs (5 more after the one above).
+        for _ in 0 .. 5 {
+            if is_eol_ahead(&self.reader) {
+                skip_to_eol(&mut self.reader).map_err(|_| DecodeError::Invalid)?;
             } else {
                 return Ok(DecodeStatus::Incomplete)
             }
@@ -109,6 +126,49 @@ impl<E: std::fmt::Debug, R: Iterator<Item=Result<u8, E>>> Group3Decoder<R> {
     }
     pub fn transitions(&self) -> &[u16] {
         &self.current
+    }
+}
+
+/// Check if the next bits form an EOL marker (possibly with fill bits).
+///
+/// An EOL is `000000000001` (11 zeros + 1). Fill bits add extra leading zeros
+/// for byte alignment. No valid run-length code has more than 8 leading zeros,
+/// so 9+ leading zeros guarantees we're looking at fill + EOL, not a code.
+///
+/// We check for EOL both with and without fill bits by peeking up to 16 bits.
+fn is_eol_ahead<E, R: Iterator<Item=Result<u8, E>>>(reader: &ByteReader<R>) -> bool {
+    // Check without fill bits: exactly 000000000001
+    if reader.peek(EOL.len) == Some(EOL.data) {
+        return true;
+    }
+    // Check with 1-4 fill bits: the pattern is (fill zeros)(000000000001)
+    // Total bits = 12 + fill, and the value is still just 1 (all leading bits are zero).
+    for fill in 1u8..=4 {
+        let total = EOL.len + fill;
+        if let Some(val) = reader.peek(total) {
+            if val == EOL.data {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Skip zero fill bits and consume the EOL marker (000000000001).
+/// Returns Err if no valid EOL is found.
+fn skip_to_eol<E: std::fmt::Debug, R: Iterator<Item=Result<u8, E>>>(
+    reader: &mut ByteReader<R>,
+) -> Result<(), DecodeError<E>> {
+    // Skip zero fill bits (used for byte alignment in Group3Options bit 2).
+    while reader.peek(1) == Some(0) {
+        reader.consume(1).map_err(DecodeError::Reader)?;
+    }
+    // The next bit should be the '1' that terminates the EOL.
+    if reader.peek(1) == Some(1) {
+        reader.consume(1).map_err(DecodeError::Reader)?;
+        Ok(())
+    } else {
+        Err(DecodeError::Invalid)
     }
 }
 
