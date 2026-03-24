@@ -1,8 +1,11 @@
-#![feature(slice_split_once)]
-
 use fax::{VecWriter, decoder, decoder::pels, BitWriter, Bits, Color};
 use std::io::Write;
 use std::fs::{self, File};
+
+fn split_once_byte(data: &[u8], needle: u8) -> Option<(&[u8], &[u8])> {
+    let pos = data.iter().position(|&b| b == needle)?;
+    Some((&data[..pos], &data[pos + 1..]))
+}
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -10,9 +13,9 @@ fn main() {
     let reference = args.next().unwrap();
 
     let ref_data = std::fs::read(&reference).unwrap();
-    let (header1, data) = ref_data.split_once(|&b| b == b'\n').unwrap();
+    let (header1, data) = split_once_byte(&ref_data, b'\n').unwrap();
     assert_eq!(header1, b"P4");
-    let (header2, ref_image) = data.split_once(|&b| b == b'\n').unwrap();
+    let (header2, ref_image) = split_once_byte(data, b'\n').unwrap();
     let header2 = std::str::from_utf8(header2).unwrap();
     dbg!(header2);
     let (w, h) = header2.split_once(" ").unwrap();
