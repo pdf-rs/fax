@@ -12,7 +12,7 @@ fn split_once_byte(data: &[u8], needle: u8) -> Option<(&[u8], &[u8])> {
 
 #[test]
 fn main() {
-    let data_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fax-test");
+    let data_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("test-files/files");
 
     let mut fails = vec![];
 
@@ -28,7 +28,7 @@ fn main() {
             read_pbm(&pbm).test_tiff(&p)
         } else {
             continue;
-        };  
+        };
         println!("{base:?} {r:?}");
         if r.is_err() {
             fails.push(p);
@@ -137,7 +137,7 @@ impl TestImage {
                 break;
             }
         }
-        
+
         dbg!(fax::maps::mode::decode(&mut expected));
 
         if fail {
