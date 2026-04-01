@@ -1,7 +1,7 @@
+use fax::decoder;
+use fax::tiff::wrap;
 use std::fs;
 use std::path::Path;
-use fax::tiff::wrap;
-use fax::decoder;
 
 fn convert_fax_to_tiff(input: &Path, width: u16, output: &Path) {
     let data = fs::read(input).expect("Failed to read input file");

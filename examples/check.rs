@@ -1,6 +1,6 @@
-use fax::{VecWriter, decoder, decoder::pels, BitWriter, Bits, Color};
-use std::io::Write;
+use fax::{decoder, decoder::pels, BitWriter, Bits, Color, VecWriter};
 use std::fs::{self, File};
+use std::io::Write;
 
 fn split_once_byte(data: &[u8], needle: u8) -> Option<(&[u8], &[u8])> {
     let pos = data.iter().position(|&b| b == needle)?;
@@ -33,23 +33,35 @@ fn main() {
         let mut decoder = Decoder::new(reader).unwrap();
         let (w, h) = decoder.chunk_dimensions();
         let mut buf = vec![0; w as usize * h as usize];
-        let strip_offset = decoder.get_tag(Tag::StripOffsets).unwrap().into_u32().unwrap() as usize;
-        let strip_bytes = decoder.get_tag(Tag::StripByteCounts).unwrap().into_u32().unwrap() as usize;
+        let strip_offset = decoder
+            .get_tag(Tag::StripOffsets)
+            .unwrap()
+            .into_u32()
+            .unwrap() as usize;
+        let strip_bytes = decoder
+            .get_tag(Tag::StripByteCounts)
+            .unwrap()
+            .into_u32()
+            .unwrap() as usize;
 
-        let interpr = decoder.get_tag(Tag::PhotometricInterpretation).unwrap().into_u16().unwrap();
+        let interpr = decoder
+            .get_tag(Tag::PhotometricInterpretation)
+            .unwrap()
+            .into_u16()
+            .unwrap();
 
-        data = tiff[strip_offset .. strip_offset + strip_bytes].to_vec();
+        data = tiff[strip_offset..strip_offset + strip_bytes].to_vec();
         inverted = interpr != 0;
-    } else {    
+    } else {
         data = fs::read(&input).unwrap();
         inverted = false;
     }
     let mut height = 0;
     let (black, white) = match inverted {
         false => (Bits { data: 1, len: 1 }, Bits { data: 0, len: 1 }),
-        true => (Bits { data: 0, len: 1 }, Bits { data: 1, len: 1 })
+        true => (Bits { data: 0, len: 1 }, Bits { data: 1, len: 1 }),
     };
-    decoder::decode_g4(data.iter().cloned(), width, None,  |transitions| {
+    decoder::decode_g4(data.iter().cloned(), width, None, |transitions| {
         let mut writer = VecWriter::new();
         for c in pels(transitions, width) {
             let bit = match c {
@@ -66,9 +78,9 @@ fn main() {
             println!("    ref: {}", Line(ref_line));
             'a: for (byte, (&r, &v)) in ref_line.iter().zip(data.iter()).enumerate() {
                 if r != v {
-                    for i in (0 .. 8).rev() {
+                    for i in (0..8).rev() {
                         if r & (1 << i) != v & (1 << i) {
-                            println!("mismatch at pos {}", (8 * byte) + 7-i);
+                            println!("mismatch at pos {}", (8 * byte) + 7 - i);
                             break 'a;
                         }
                     }
@@ -82,9 +94,13 @@ fn main() {
 
 struct Line<'a>(&'a [u8]);
 impl<'a> std::fmt::Display for Line<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {       
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let codes = [' ', '▐', '▌', '█'];
-        for b in self.0.iter().flat_map(|b| [b >> 6, (b >> 4) & 3, (b >>2) & 3, b & 3]) {
+        for b in self
+            .0
+            .iter()
+            .flat_map(|b| [b >> 6, (b >> 4) & 3, (b >> 2) & 3, b & 3])
+        {
             write!(f, "{}", codes[b as usize])?;
         }
         Ok(())
