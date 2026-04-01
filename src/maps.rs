@@ -1,10 +1,10 @@
-use fax_derive::bitmaps;
 use crate::{BitReader, Bits};
+use fax_derive::bitmaps;
 
 enum Entry<T: Copy + 'static> {
     Leaf(u8, &'static [Option<(T, u8)>]),
     Value(T, u8),
-    Prefix(u8, &'static [Entry<T>])
+    Prefix(u8, &'static [Entry<T>]),
 }
 impl<T: Copy> Entry<T> {
     fn find(&self, reader: &mut impl BitReader) -> Option<T> {
@@ -276,4 +276,3 @@ bitmaps! {
         000000011111 => 2560,
     },
 }
-
