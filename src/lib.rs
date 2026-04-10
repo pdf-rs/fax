@@ -20,8 +20,14 @@ macro_rules! debug {
 
 pub mod maps;
 
-/// Decoder module
+/// Legacy decoder module (Group3Decoder, Group4Decoder, decode_g3, decode_g4)
 pub mod decoder;
+
+/// Unified decoder module (Decoder, DecodeOptions, decode)
+pub mod unified;
+pub use unified::{
+    decode, pels32, DecodeOptions, Decoder, EncodingMode, Error as UnifiedError, Limits,
+};
 
 /// Encoder module
 pub mod encoder;
@@ -123,6 +129,8 @@ pub struct ByteReader<R> {
     read: R,
     partial: u32,
     valid: u8,
+    reverse_bits: bool,
+    bytes_consumed: usize,
 }
 impl<E, R: Iterator<Item = Result<u8, E>>> ByteReader<R> {
     /// Construct a new `ByteReader` from an iterator of `u8`
@@ -131,20 +139,53 @@ impl<E, R: Iterator<Item = Result<u8, E>>> ByteReader<R> {
             read,
             partial: 0,
             valid: 0,
+            reverse_bits: false,
+            bytes_consumed: 0,
         };
         bits.fill()?;
         Ok(bits)
+    }
+    /// Construct a `ByteReader` with LSB-first bit order.
+    /// Each input byte has its bits reversed before being added to the buffer.
+    pub fn new_lsb(read: R) -> Result<Self, E> {
+        let mut bits = ByteReader {
+            read,
+            partial: 0,
+            valid: 0,
+            reverse_bits: true,
+            bytes_consumed: 0,
+        };
+        bits.fill()?;
+        Ok(bits)
+    }
+    /// Number of input bytes consumed so far.
+    pub fn bytes_consumed(&self) -> usize {
+        self.bytes_consumed
     }
     fn fill(&mut self) -> Result<(), E> {
         while self.valid < 16 {
             match self.read.next() {
                 Some(Ok(byte)) => {
+                    let byte = if self.reverse_bits {
+                        byte.reverse_bits()
+                    } else {
+                        byte
+                    };
                     self.partial = self.partial << 8 | byte as u32;
                     self.valid += 8;
+                    self.bytes_consumed += 1;
                 }
                 Some(Err(e)) => return Err(e),
                 None => break,
             }
+        }
+        Ok(())
+    }
+    /// Consume bits to reach the next byte boundary.
+    pub fn align_to_byte(&mut self) -> Result<(), E> {
+        let n = self.bits_to_byte_boundary();
+        if n > 0 {
+            self.consume(n)?;
         }
         Ok(())
     }

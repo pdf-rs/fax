@@ -4,7 +4,16 @@ use std::io::{self, Bytes, Read};
 use crate::maps::{black, mode, white, Mode, EDFB_HALF, EOL};
 use crate::{BitReader, ByteReader, Color, Transitions};
 
-fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
+/// Result of decoding a single 2D line.
+#[derive(Debug, PartialEq, Eq)]
+enum LineResult {
+    /// Normal line completion (a0 reached width).
+    Complete,
+    /// EOFB / EOF marker encountered.
+    Eof,
+}
+
+pub(crate) fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
 where
     D: Fn(&mut R) -> Option<u16>,
 {
@@ -20,7 +29,86 @@ where
     None
 }
 
-fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
+/// Decode a single 2D (mode-coded) line against a reference line.
+fn decode_2d_line<E, R: Iterator<Item = Result<u8, E>>>(
+    reader: &mut ByteReader<R>,
+    reference: &[u16],
+    current: &mut Vec<u16>,
+    width: u16,
+) -> Result<LineResult, DecodeError<E>> {
+    let mut transitions = Transitions::new(reference);
+    let mut a0 = 0u16;
+    let mut color = Color::White;
+    let mut start_of_row = true;
+
+    loop {
+        let mode = match mode::decode(reader) {
+            Some(mode) => mode,
+            None => return Err(DecodeError::Invalid),
+        };
+
+        match mode {
+            Mode::Pass => {
+                if start_of_row && color == Color::White {
+                    transitions.pos += 1;
+                } else {
+                    transitions
+                        .next_color(a0, !color, false)
+                        .ok_or(DecodeError::Invalid)?;
+                }
+                if let Some(b2) = transitions.next() {
+                    a0 = b2;
+                }
+            }
+            Mode::Vertical(delta) => {
+                let b1 = transitions
+                    .next_color(a0, !color, start_of_row)
+                    .unwrap_or(width);
+                let a1_i32 = b1 as i32 + delta as i32;
+                if a1_i32 < 0 || a1_i32 > width as i32 {
+                    break;
+                }
+                let a1 = a1_i32 as u16;
+                if a1 < width {
+                    current.push(a1);
+                }
+                color = !color;
+                a0 = a1;
+                if delta < 0 {
+                    transitions.seek_back(a0);
+                }
+            }
+            Mode::Horizontal => {
+                let a0a1 = colored(color, reader).ok_or(DecodeError::Invalid)?;
+                let a1a2 = colored(!color, reader).ok_or(DecodeError::Invalid)?;
+                let a1 = a0.checked_add(a0a1).ok_or(DecodeError::Invalid)?;
+                let a2 = a1.checked_add(a1a2).ok_or(DecodeError::Invalid)?;
+                if a1 < width {
+                    current.push(a1);
+                }
+                if a2 >= width {
+                    break;
+                }
+                current.push(a2);
+                a0 = a2;
+            }
+            Mode::Extension => {
+                let _ext = reader.peek(3).ok_or(DecodeError::Invalid)?;
+                let _ = reader.consume(3);
+                return Err(DecodeError::Unsupported);
+            }
+            Mode::EOF => return Ok(LineResult::Eof),
+        }
+        start_of_row = false;
+
+        if a0 >= width {
+            break;
+        }
+    }
+    Ok(LineResult::Complete)
+}
+
+pub(crate) fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
     //debug!("{:?}", current);
     match current {
         Color::Black => with_markup(black::decode, reader),
@@ -140,7 +228,7 @@ impl<E: std::fmt::Debug, R: Iterator<Item = Result<u8, E>>> Group3Decoder<R> {
 /// We peek at 9 bits: if all zero, this is definitely fill+EOL or bare EOL
 /// (the EOL itself starts with 11 zeros). This handles any fill count
 /// without exceeding the 16-bit peek window.
-fn is_eol_ahead<E, R: Iterator<Item = Result<u8, E>>>(reader: &ByteReader<R>) -> bool {
+pub(crate) fn is_eol_ahead<E, R: Iterator<Item = Result<u8, E>>>(reader: &ByteReader<R>) -> bool {
     // 9 zero bits cannot be the start of any valid run-length code
     // (max leading zeros in any code is 7). Must be fill + EOL.
     // This also matches bare EOL (000000000001) since its first 9 bits are zero.
@@ -149,7 +237,7 @@ fn is_eol_ahead<E, R: Iterator<Item = Result<u8, E>>>(reader: &ByteReader<R>) ->
 
 /// Skip zero fill bits and consume the EOL marker (000000000001).
 /// Returns Err if no valid EOL is found.
-fn skip_to_eol<E: std::fmt::Debug, R: Iterator<Item = Result<u8, E>>>(
+pub(crate) fn skip_to_eol<E: std::fmt::Debug, R: Iterator<Item = Result<u8, E>>>(
     reader: &mut ByteReader<R>,
 ) -> Result<(), DecodeError<E>> {
     // Skip zero fill bits (used for byte alignment in Group3Options bit 2).
