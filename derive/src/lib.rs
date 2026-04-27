@@ -59,6 +59,9 @@ pub fn bitmaps(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let expanded = quote! {
         #(#maps)*
     };
+    if let Ok(path) = std::env::var("WRITE_BITMAPS") {
+        std::fs::write(path, expanded.to_string()).unwrap();
+    }
 
     // Hand the output tokens back to the compiler
     proc_macro::TokenStream::from(expanded)

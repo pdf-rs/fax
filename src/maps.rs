@@ -1,5 +1,4 @@
 use crate::{BitReader, Bits};
-use fax_derive::bitmaps;
 
 enum Entry<T: Copy + 'static> {
     Leaf(u8, &'static [Option<(T, u8)>]),
@@ -49,6 +48,10 @@ pub enum Mode {
     EOF,
 }
 
+#[cfg(feature="generate_bitmaps")]
+use fax_derive::bitmaps;
+
+#[cfg(feature="generate_bitmaps")]
 bitmaps! {
     mode <Mode> {
         0001 => Mode::Pass,
@@ -276,3 +279,6 @@ bitmaps! {
         000000011111 => 2560,
     },
 }
+
+#[cfg(not(feature="generate_bitmaps"))]
+include!("bitmaps.rs");
