@@ -5,7 +5,7 @@ use std::io::Write;
 fn main() {
     let mut args = std::env::args().skip(1);
     let input: String = args.next().unwrap();
-    let width: u16 = args.next().unwrap().parse().unwrap();
+    let width: u32 = args.next().unwrap().parse().unwrap();
     let output = args.next().unwrap();
 
     let data = fs::read(&input).unwrap();

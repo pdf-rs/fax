@@ -19,8 +19,8 @@ fn main() {
     let header2 = std::str::from_utf8(header2).unwrap();
     dbg!(header2);
     let (w, h) = header2.split_once(" ").unwrap();
-    let width: u16 = w.parse().unwrap();
-    let h: u16 = h.parse().unwrap();
+    let width: u32 = w.parse().unwrap();
+    let h: u32 = h.parse().unwrap();
 
     let mut ref_lines = ref_image.chunks_exact((width as usize + 7) / 8);
 

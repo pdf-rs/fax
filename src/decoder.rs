@@ -4,14 +4,14 @@ use std::io::{self, Bytes, Read};
 use crate::maps::{black, mode, white, Mode, EDFB_HALF, EOL};
 use crate::{BitReader, ByteReader, Color, Transitions};
 
-fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u16>
+fn with_markup<D, R>(decoder: D, reader: &mut R) -> Option<u32>
 where
     D: Fn(&mut R) -> Option<u16>,
 {
-    let mut sum: u16 = 0;
+    let mut sum: u32 = 0;
     while let Some(n) = decoder(reader) {
         //print!("{} ", n);
-        sum = sum.checked_add(n)?;
+        sum = sum.checked_add(n as u32)?;
         if n < 64 {
             //debug!("= {}", sum);
             return Some(sum);
@@ -20,7 +20,7 @@ where
     None
 }
 
-fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
+fn colored(current: Color, reader: &mut impl BitReader) -> Option<u32> {
     //debug!("{:?}", current);
     match current {
         Color::Black => with_markup(black::decode, reader),
@@ -32,7 +32,7 @@ fn colored(current: Color, reader: &mut impl BitReader) -> Option<u16> {
 ///
 /// The width of the line/image has to be given in `width`.
 /// The iterator will produce exactly that many items.
-pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item = Color> + '_ {
+pub fn pels(line: &[u32], width: u32) -> impl Iterator<Item = Color> + '_ {
     use std::iter::repeat;
     let mut color = Color::White;
     let mut last = 0;
@@ -55,7 +55,7 @@ pub fn pels(line: &[u16], width: u16) -> impl Iterator<Item = Color> + '_ {
 /// The argument is the list of positions of color change, starting with white.
 ///
 /// To obtain an iterator over the pixel colors, the `pels` function is provided.
-pub fn decode_g3(input: impl Iterator<Item = u8>, mut line_cb: impl FnMut(&[u16])) -> Option<()> {
+pub fn decode_g3(input: impl Iterator<Item = u8>, mut line_cb: impl FnMut(&[u32])) -> Option<()> {
     let reader = input.map(Result::<u8, Infallible>::Ok);
     let mut decoder = Group3Decoder::new(reader).ok()?;
 
@@ -79,7 +79,7 @@ pub enum DecodeStatus {
 
 pub struct Group3Decoder<R> {
     reader: ByteReader<R>,
-    current: Vec<u16>,
+    current: Vec<u32>,
 }
 impl<E: std::fmt::Debug, R: Iterator<Item = Result<u8, E>>> Group3Decoder<R> {
     pub fn new(reader: R) -> Result<Self, DecodeError<E>> {
@@ -94,7 +94,7 @@ impl<E: std::fmt::Debug, R: Iterator<Item = Result<u8, E>>> Group3Decoder<R> {
     }
     pub fn advance(&mut self) -> Result<DecodeStatus, DecodeError<E>> {
         self.current.clear();
-        let mut a0: u16 = 0;
+        let mut a0: u32 = 0;
         let mut color = Color::White;
         loop {
             // Check for EOL before attempting to parse a run-length code.
@@ -126,7 +126,7 @@ impl<E: std::fmt::Debug, R: Iterator<Item = Result<u8, E>>> Group3Decoder<R> {
 
         Ok(DecodeStatus::End)
     }
-    pub fn transitions(&self) -> &[u16] {
+    pub fn transitions(&self) -> &[u32] {
         &self.current
     }
 }
@@ -177,15 +177,15 @@ fn skip_to_eol<E: std::fmt::Debug, R: Iterator<Item = Result<u8, E>>>(
 /// To obtain an iterator over the pixel colors, the `pels` function is provided.
 pub fn decode_g4(
     input: impl Iterator<Item = u8>,
-    width: u16,
-    height: Option<u16>,
-    mut line_cb: impl FnMut(&[u16]),
+    width: u32,
+    height: Option<u32>,
+    mut line_cb: impl FnMut(&[u32]),
 ) -> Option<()> {
     let reader = input.map(Result::<u8, Infallible>::Ok);
     let mut decoder = Group4Decoder::new(reader, width).ok()?;
 
-    let max_lines = height.unwrap_or(u16::MAX);
-    let mut lines_emitted: u16 = 0;
+    let max_lines = height.unwrap_or(u32::MAX);
+    let mut lines_emitted: u32 = 0;
 
     while lines_emitted < max_lines {
         let status = decoder.advance().ok()?;
@@ -224,12 +224,12 @@ impl<E: std::error::Error> std::error::Error for DecodeError<E> {}
 
 pub struct Group4Decoder<R> {
     reader: ByteReader<R>,
-    reference: Vec<u16>,
-    current: Vec<u16>,
-    width: u16,
+    reference: Vec<u32>,
+    current: Vec<u32>,
+    width: u32,
 }
 impl<E, R: Iterator<Item = Result<u8, E>>> Group4Decoder<R> {
-    pub fn new(reader: R, width: u16) -> Result<Self, E> {
+    pub fn new(reader: R, width: u32) -> Result<Self, E> {
         Ok(Group4Decoder {
             reader: ByteReader::new(reader)?,
             reference: Vec::new(),
@@ -276,7 +276,7 @@ impl<E, R: Iterator<Item = Result<u8, E>>> Group4Decoder<R> {
                     if a1_i32 < 0 || a1_i32 > self.width as i32 {
                         break;
                     }
-                    let a1 = a1_i32 as u16;
+                    let a1 = a1_i32 as u32;
                     //debug!("transition to {:?} at {}", !color, a1);
                     // Canonical form: only store transitions strictly less
                     // than width. A transition at width is the implicit
@@ -332,7 +332,7 @@ impl<E, R: Iterator<Item = Result<u8, E>>> Group4Decoder<R> {
         Ok(DecodeStatus::Incomplete)
     }
 
-    pub fn transition(&self) -> &[u16] {
+    pub fn transition(&self) -> &[u32] {
         &self.reference
     }
 
@@ -345,8 +345,8 @@ impl<E, R: Iterator<Item = Result<u8, E>>> Group4Decoder<R> {
 }
 
 pub struct Line<'a> {
-    pub transitions: &'a [u16],
-    pub width: u16,
+    pub transitions: &'a [u32],
+    pub width: u32,
 }
 impl<'a> Line<'a> {
     pub fn pels(&self) -> impl Iterator<Item = Color> + 'a {
@@ -424,8 +424,8 @@ mod tests {
     /// semantic form) rather than transition lists.
     #[test]
     fn g4_roundtrip_width_boundary_transition() {
-        let transitions = vec![3u16, 4];
-        let width = 4u16;
+        let transitions = vec![3u32, 4];
+        let width = 4u32;
         let input_pels: Vec<_> = super::pels(&transitions, width).collect();
         let writer = crate::VecWriter::new();
         let mut encoder = crate::encoder::Encoder::new(writer);
@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn g4_roundtrip_canonical_form() {
         for &(width, ref transitions) in &[
-            (10u16, vec![5]),
+            (10u32, vec![5]),
             (2000, vec![10]),
             (2000, vec![3, 51]),
             (4, vec![3]),

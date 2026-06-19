@@ -3,7 +3,7 @@ use crate::{
     BitWriter, Color, Transitions,
 };
 
-fn absdiff(a: u16, b: u16) -> u16 {
+fn absdiff(a: u32, b: u32) -> u32 {
     if a > b {
         a - b
     } else {
@@ -13,18 +13,18 @@ fn absdiff(a: u16, b: u16) -> u16 {
 
 pub struct Encoder<W> {
     writer: W,
-    reference: Vec<u16>,
-    current: Vec<u16>,
+    reference: Vec<u32>,
+    current: Vec<u32>,
 }
-fn encode_color<W: BitWriter>(writer: &mut W, color: Color, mut n: u16) -> Result<(), W::Error> {
+fn encode_color<W: BitWriter>(writer: &mut W, color: Color, mut n: u32) -> Result<(), W::Error> {
     let table = match color {
         Color::White => &white::ENTRIES,
         Color::Black => &black::ENTRIES,
     };
-    let mut write = |n: u16| {
+    let mut write = |n: u32| {
         let idx = if n >= 64 { 63 + n / 64 } else { n } as usize;
         let (v, bits) = table[idx];
-        assert_eq!(v, n);
+        assert_eq!(v as u32, n);
         //debug!("{}", n);
         writer.write(bits)
     };
@@ -52,7 +52,7 @@ impl<W: BitWriter> Encoder<W> {
     pub fn encode_line(
         &mut self,
         pels: impl Iterator<Item = Color>,
-        width: u16,
+        width: u32,
     ) -> Result<(), W::Error> {
         let mut color = Color::White;
         let mut transitions = Transitions::new(&self.reference);
@@ -64,7 +64,7 @@ impl<W: BitWriter> Encoder<W> {
                 Some(if c != *state {
                     debug!("  {i} {c:?}");
                     *state = c;
-                    Some(i as u16)
+                    Some(i as u32)
                 } else {
                     None
                 })

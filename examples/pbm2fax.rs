@@ -32,7 +32,7 @@ fn main() {
             false => Color::White,
             true => Color::Black,
         });
-        encoder.encode_line(line, width as u16).unwrap();
+        encoder.encode_line(line, width).unwrap();
     }
     let data = encoder.finish().unwrap().finish();
 

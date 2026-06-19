@@ -13,11 +13,11 @@ fn main() {
     let mut parts = data.splitn(3, |&b| b == b'\n');
     assert_eq!(parts.next().unwrap(), b"P4");
     let mut size = parts.next().unwrap().splitn(2, |&b| b == b' ');
-    let width: u16 = std::str::from_utf8(size.next().unwrap())
+    let width: u32 = std::str::from_utf8(size.next().unwrap())
         .unwrap()
         .parse()
         .unwrap();
-    let height: u16 = std::str::from_utf8(size.next().unwrap())
+    let height: u32 = std::str::from_utf8(size.next().unwrap())
         .unwrap()
         .parse()
         .unwrap();

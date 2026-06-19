@@ -441,14 +441,14 @@ impl Not for Color {
 }
 
 struct Transitions<'a> {
-    edges: &'a [u16],
+    edges: &'a [u32],
     pos: usize,
 }
 impl<'a> Transitions<'a> {
-    fn new(edges: &'a [u16]) -> Self {
+    fn new(edges: &'a [u32]) -> Self {
         Transitions { edges, pos: 0 }
     }
-    fn seek_back(&mut self, start: u16) {
+    fn seek_back(&mut self, start: u32) {
         self.pos = self.pos.min(self.edges.len().saturating_sub(1));
         while self.pos > 0 {
             if start < self.edges[self.pos - 1] {
@@ -458,7 +458,7 @@ impl<'a> Transitions<'a> {
             }
         }
     }
-    fn next_color(&mut self, start: u16, color: Color, start_of_row: bool) -> Option<u16> {
+    fn next_color(&mut self, start: u32, color: Color, start_of_row: bool) -> Option<u32> {
         if start_of_row {
             if color == Color::Black {
                 self.pos = 1;
@@ -488,7 +488,7 @@ impl<'a> Transitions<'a> {
             None
         }
     }
-    fn next(&mut self) -> Option<u16> {
+    fn next(&mut self) -> Option<u32> {
         if self.pos < self.edges.len() {
             let val = self.edges[self.pos];
             self.pos += 1;
@@ -497,7 +497,7 @@ impl<'a> Transitions<'a> {
             None
         }
     }
-    fn peek(&self) -> Option<u16> {
+    fn peek(&self) -> Option<u32> {
         self.edges.get(self.pos).cloned()
     }
     fn skip(&mut self, n: usize) {

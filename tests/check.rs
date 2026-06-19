@@ -116,8 +116,8 @@ fn roundtrip_encode_test_images() {
 }
 
 struct TestImage {
-    width: u16,
-    height: u16,
+    width: u32,
+    height: u32,
     data: Vec<u8>,
 }
 fn read_pbm(path: &Path) -> TestImage {
@@ -127,8 +127,8 @@ fn read_pbm(path: &Path) -> TestImage {
     let (header2, ref_image) = split_once_byte(data, b'\n').unwrap();
     let header2 = std::str::from_utf8(header2).unwrap();
     let (w, h) = header2.split_once(" ").unwrap();
-    let width: u16 = w.parse().unwrap();
-    let h: u16 = h.parse().unwrap();
+    let width: u32 = w.parse().unwrap();
+    let h: u32 = h.parse().unwrap();
 
     TestImage {
         width,

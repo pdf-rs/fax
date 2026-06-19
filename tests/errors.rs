@@ -3,7 +3,7 @@ use fax::tiff::wrap;
 use std::fs;
 use std::path::Path;
 
-fn convert_fax_to_tiff(input: &Path, width: u16, output: &Path) {
+fn convert_fax_to_tiff(input: &Path, width: u32, output: &Path) {
     let data = fs::read(input).expect("Failed to read input file");
     let mut height = 0u32;
 
@@ -14,7 +14,7 @@ fn convert_fax_to_tiff(input: &Path, width: u16, output: &Path) {
     fs::write(output, wrap(&data, width as _, height)).expect("Failed to write TIFF file");
 }
 
-fn parse_filename(name: &str) -> Option<(&str, u16)> {
+fn parse_filename(name: &str) -> Option<(&str, u32)> {
     let name = name.strip_suffix(".raw")?;
     let (id, rest) = name.split_once('_')?;
     let width_str = rest.strip_prefix("0-w")?;
