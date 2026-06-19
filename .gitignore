@@ -1,4 +1,5 @@
 /target
 /fuzz/artifacts
 /fuzz/corpus
+/fuzz/target
 Cargo.lock
