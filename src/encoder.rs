@@ -99,9 +99,24 @@ impl<W: BitWriter> Encoder<W> {
                         continue;
                     }
                     (b1, _) if absdiff(a1, b1) <= 3 => {
-                        let delta = a1 as i16 - b1 as i16;
+                        // Positions are u32, and rows may be wider than 32,767
+                        // pixels, so neither operand fits in i16/i8 on its own:
+                        // `a1 as i16 - b1 as i16` overflows as soon as the two
+                        // straddle 32,767. Only the *difference* is known to be
+                        // small, and that is enough: we are here only when
+                        // |a1 - b1| <= 3, so the true difference is -3..=3.
+                        //
+                        // wrapping_sub subtracts modulo 2^32. Since a1 and b1
+                        // are congruent to their difference mod 2^32, and 2^8
+                        // divides 2^32, the wrapped result is also congruent to
+                        // the true difference mod 2^8 -- i.e. its low 8 bits are
+                        // exactly the two's-complement form of a value in
+                        // -3..=3. `as i8` reads off precisely those 8 bits, so
+                        // the cast returns the true difference with no wider
+                        // intermediate type involved.
+                        let delta = a1.wrapping_sub(b1) as i8;
                         debug!("  Vertical({})", delta);
-                        let bits = mode::encode(Mode::Vertical(delta as i8)).unwrap();
+                        let bits = mode::encode(Mode::Vertical(delta)).unwrap();
                         writer.write(bits)?;
                         a0 = a1;
                         color = !color;
