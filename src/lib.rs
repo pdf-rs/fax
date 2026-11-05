@@ -45,7 +45,7 @@ pub trait BitReader {
 
     /// Assert that the next bits matches the given pattern.
     ///
-    /// If it does not match, the found pattern is returned if enough bits are aviable.
+    /// If it does not match, the found pattern is returned if enough bits are available.
     /// Otherwise None is returned.
     fn expect(&mut self, bits: Bits) -> Result<(), Option<Bits>> {
         match self.peek(bits.len) {
@@ -63,7 +63,7 @@ pub trait BitReader {
 
 /// Trait to write data bitwise
 ///
-/// The `VecWriter` struct is provided for convinience.
+/// The `VecWriter` struct is provided for convenience.
 pub trait BitWriter {
     type Error;
     fn write(&mut self, bits: Bits) -> Result<(), Self::Error>;
