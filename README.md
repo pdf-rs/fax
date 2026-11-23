@@ -6,3 +6,7 @@ Currently supported:
 
 
 You can ask questions on [Zulip](https://type.zulipchat.com/#narrow/stream/209232-pdf/topic/fax.20.2F.20master)
+
+## License
+
+MIT
