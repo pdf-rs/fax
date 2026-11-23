@@ -15,7 +15,7 @@ debug = []
 generate_bitmaps = ["dep:fax_derive"]
 
 [dependencies]
-fax_derive = { version = "0.2.0", path = "derive", optional=true }
+fax_derive = { version = "0.2.1", path = "derive", optional=true }
 
 [dev-dependencies]
 tiff = { version = "0.11.3" }
